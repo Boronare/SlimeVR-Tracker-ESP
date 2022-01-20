@@ -143,14 +143,33 @@ void MPU9250Sensor::motionLoop() {
     imu.dmpGetQuaternion(&rawQuat, fifoBuffer);
     Quat quat(-rawQuat.y,rawQuat.x,rawQuat.z,rawQuat.w);
     if(!skipCalcMag){
-        getMPUScaled();
+        int16_t mag[3];
+        imu.dmpGetMag(mag,fifoBuffer);
+        // Apply correction for 16-bit mode and factory sensitivity adjustments
+        //apply offsets and scale factors from Magneto
+        float temp[3];
+        #if useFullCalibrationMatrix == true
+            for (uint16_t i = 0; i < 3; i++){
+                Mxyz[i] = (float)mag[i] * 0.15f * adjustments[i];
+                temp[i] = (Mxyz[i] - calibration->M_B[i]);
+            }
+            for(uint16_t i=0;i<3;i++)
+                Mxyz[i] = calibration->M_Ainv[i][0] * temp[0] + calibration->M_Ainv[i][1] * temp[1] + calibration->M_Ainv[i][2] * temp[2];
+        #else
+            for (i = 0; i < 3; i++)
+                Mxyz[i] = (float)mag[i] * 0.15f * adjustments[i];
+                Mxyz[i] = (Mxyz[i] - calibration->M_B[i]);
+        #endif
+        VectorFloat grav;
+        imu.dmpGetGravity(&grav,&rawQuat);
+        float Grav[3]={grav.x,grav.y,grav.z};
         if(Mxyz[0]==0.0f && Mxyz[1]==0.0f && Mxyz[2]==0.0f) return;
         skipCalcMag=SKIP_CALC_MAG_INTERVAL;
         if(correction.length_squared()==0.0f) {
-            correction=getCorrection(Axyz,Mxyz,quat);
+            correction=getCorrection(Grav,Mxyz,quat);
             if(isSecond) skipCalcMag=SKIP_CALC_MAG_INTERVAL/2;
         }
-        else correction = correction.slerp(getCorrection(Axyz,Mxyz,quat),MAG_CORR_RATIO);
+        else correction = correction.slerp(getCorrection(Grav,Mxyz,quat),MAG_CORR_RATIO);
     }else skipCalcMag--;
     quaternion=correction*quat;
 #else
