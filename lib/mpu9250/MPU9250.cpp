@@ -62,40 +62,18 @@ void MPU9250::initialize(uint8_t address) {
 
     // Enable I2C bypass to access magnetometer
     setI2CBypassEnabled(true);
-    // Power down magnetometer
-    I2Cdev::writeByte(MPU9250_RA_MAG_ADDRESS, MPU9250_RA_MAG_CNTL1, 0x00);
-    delay(10);
 
-    // Enable FUSE rom access
-    I2Cdev::writeByte(MPU9250_RA_MAG_ADDRESS, MPU9250_RA_MAG_CNTL1, 0x0F);
-    delay(10);
+    // Enable magnetometer
+    I2Cdev::writeByte(0x0D, 0x0B, 0x01);
+    // Set continuous reading mode 200hz
+    I2Cdev::writeByte(0x0D, 0x09, 0x1D);
 
-    // Read and store magnetometer factory sensitivity adjustments
-    uint8_t adjx = 0, adjy = 0, adjz = 0;
-    I2Cdev::readByte(MPU9250_RA_MAG_ADDRESS, MPU9250_RA_MAG_ASAX, &adjx);
-    I2Cdev::readByte(MPU9250_RA_MAG_ADDRESS, MPU9250_RA_MAG_ASAY, &adjy);
-    I2Cdev::readByte(MPU9250_RA_MAG_ADDRESS, MPU9250_RA_MAG_ASAZ, &adjz);
-    asax = (0.5 * (adjx - 128)) / 128 + 1;
-    asay = (0.5 * (adjy - 128)) / 128 + 1;
-    asaz = (0.5 * (adjz - 128)) / 128 + 1;
-
-    // Power down magnetometer
-    I2Cdev::writeByte(MPU9250_RA_MAG_ADDRESS, MPU9250_RA_MAG_CNTL1, 0x00);
-    delay(10);
-
-    // Enable magnetometer in continuous reading mode 16-bit 100hz
-    I2Cdev::writeByte(MPU9250_RA_MAG_ADDRESS, MPU9250_RA_MAG_CNTL1, 0x16);
-    delay(10);
-
-    // Disable I2C bypass to avoid conflicts with aux tracker's magnetometer
     setI2CBypassEnabled(false);
 
-    // Set up magnetometer as slave 0 for reading
-    I2Cdev::writeByte(devAddr, MPU9250_RA_I2C_SLV0_ADDR, MPU9250_RA_MAG_ADDRESS|0x80);
-    // Start reading from HXL register
-    I2Cdev::writeByte(devAddr, MPU9250_RA_I2C_SLV0_REG,  MPU9250_RA_MAG_XOUT_L);
-    // Read 7 bytes (until ST2 register), group LSB and MSB
-    I2Cdev::writeByte(devAddr, MPU9250_RA_I2C_SLV0_CTRL, 0x97);
+    // Set up slave 0 for reading
+    I2Cdev::writeByte(devAddr, MPU9250_RA_I2C_SLV0_ADDR, 0x0D|0x80);
+    I2Cdev::writeByte(devAddr, MPU9250_RA_I2C_SLV0_REG,  0x00);
+    I2Cdev::writeByte(devAddr, MPU9250_RA_I2C_SLV0_CTRL, 0x96);
     delay(10);
 
     // Enable I2C master to read from magnetometer
