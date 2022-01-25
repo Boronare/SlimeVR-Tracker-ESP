@@ -53,6 +53,10 @@ namespace {
 void MPU9250Sensor::motionSetup() {
     DeviceConfig * const config = getConfigPtr();
     calibration = &config->calibration[isSecond?1:0];
+    Serial.printf("MagCali:%f,%f,%f/%f,%f,%f/%f,%f,%f/%f,%f,%f\n",calibration->M_B[0],calibration->M_B[1],calibration->M_B[2],
+    calibration->M_Ainv[0][0],calibration->M_Ainv[0][1],calibration->M_Ainv[0][2],
+    calibration->M_Ainv[1][0],calibration->M_Ainv[1][1],calibration->M_Ainv[1][2],
+    calibration->M_Ainv[2][0],calibration->M_Ainv[2][1],calibration->M_Ainv[2][2]);
     uint8_t addr = isSecond?0x69:0x68;
     if(!I2CSCAN::isI2CExist(addr)) {
         addr = isSecond?0x68:0x69;
@@ -73,19 +77,6 @@ void MPU9250Sensor::motionSetup() {
     }
     int16_t ax,ay,az,dumb;
 
-    // turn on while flip back to calibrate. then, flip again after 5 seconds.    
-    // TODO: Move calibration invoke after calibrate button on slimeVR server available 
-    imu.getMotion6(&ax, &ay, &az, &dumb, &dumb, &dumb);
-    if(az<0 && 10.0*(ax*ax+ay*ay)<az*az) {
-        digitalWrite(CALIBRATING_LED, HIGH);
-        Serial.println("Calling Calibration... Flip front to confirm start calibration.");
-        delay(5000);
-        digitalWrite(CALIBRATING_LED, LOW);
-        imu.getMotion6(&ax, &ay, &az, &dumb, &dumb, &dumb);
-        if(az>0 && 10.0*(ax*ax+ay*ay)<az*az) 
-            startCalibration(0);
-    }
-    imu.getMagnetometerAdjustments(adjustments);
 #ifndef _MAHONY_H_
     devStatus = imu.dmpInitialize();
     if(devStatus == 0){
@@ -123,6 +114,19 @@ void MPU9250Sensor::motionSetup() {
         Serial.println(F(")"));
     }
 #endif
+    // turn on while flip back to calibrate. then, flip again after 5 seconds.    
+    // TODO: Move calibration invoke after calibrate button on slimeVR server available 
+    imu.getMotion6(&ax, &ay, &az, &dumb, &dumb, &dumb);
+    if(az<0 && 10.0*(ax*ax+ay*ay)<az*az) {
+        digitalWrite(CALIBRATING_LED, HIGH);
+        Serial.println("Calling Calibration... Flip front to confirm start calibration.");
+        delay(5000);
+        digitalWrite(CALIBRATING_LED, LOW);
+        imu.getMotion6(&ax, &ay, &az, &dumb, &dumb, &dumb);
+        if(az>0 && 10.0*(ax*ax+ay*ay)<az*az) 
+            startCalibration(0);
+    }
+    imu.getMagnetometerAdjustments(adjustments);
 }
 
 
@@ -144,22 +148,7 @@ void MPU9250Sensor::motionLoop() {
     Quat quat(-rawQuat.y,rawQuat.x,rawQuat.z,rawQuat.w);
     if(!skipCalcMag){
         int16_t mag[3];
-        imu.dmpGetMag(mag,fifoBuffer);
-        // Apply correction for 16-bit mode and factory sensitivity adjustments
-        //apply offsets and scale factors from Magneto
-        float temp[3];
-        #if useFullCalibrationMatrix == true
-            for (uint16_t i = 0; i < 3; i++){
-                Mxyz[i] = (float)mag[i] * 0.15f * adjustments[i];
-                temp[i] = (Mxyz[i] - calibration->M_B[i]);
-            }
-            for(uint16_t i=0;i<3;i++)
-                Mxyz[i] = calibration->M_Ainv[i][0] * temp[0] + calibration->M_Ainv[i][1] * temp[1] + calibration->M_Ainv[i][2] * temp[2];
-        #else
-            for (i = 0; i < 3; i++)
-                Mxyz[i] = (float)mag[i] * 0.15f * adjustments[i];
-                Mxyz[i] = (Mxyz[i] - calibration->M_B[i]);
-        #endif
+        getMPUScaled();
         VectorFloat grav;
         imu.dmpGetGravity(&grav,&rawQuat);
         float Grav[3]={grav.x,grav.y,grav.z};
@@ -228,9 +217,9 @@ void MPU9250Sensor::getMPUScaled()
     vector_normalize(Axyz);
 
     // Apply correction for 16-bit mode and factory sensitivity adjustments
-    Mxyz[0] = (float)mx * 0.15f * adjustments[0];
-    Mxyz[1] = (float)my * 0.15f * adjustments[1];
-    Mxyz[2] = (float)mz * 0.15f * adjustments[2];
+    Mxyz[0] = (float)mx;
+    Mxyz[1] = (float)my;
+    Mxyz[2] = (float)mz;
     //apply offsets and scale factors from Magneto
     #if useFullCalibrationMatrix == true
         for (i = 0; i < 3; i++)
@@ -243,6 +232,7 @@ void MPU9250Sensor::getMPUScaled()
             Mxyz[i] = (Mxyz[i] - calibration->M_B[i]);
     #endif
     vector_normalize(Mxyz);
+    // Serial.printf("%6d %6d %6d %+f %+f %+f\n",mx,my,mz,Mxyz[0],Mxyz[1],Mxyz[2]);
 }
 
 void MPU9250Sensor::startCalibration(int calibrationType) {
@@ -270,7 +260,7 @@ void MPU9250Sensor::startCalibration(int calibrationType) {
     Gxyz[1] /= calibrationSamples;
     Gxyz[2] /= calibrationSamples;
     Serial.printf("[NOTICE] Gyro calibration results: %f %f %f\n", Gxyz[0], Gxyz[1], Gxyz[2]);
-    sendRawCalibrationData(Gxyz, CALIBRATION_TYPE_EXTERNAL_GYRO, 0, PACKET_RAW_CALIBRATION_DATA);
+    // sendRawCalibrationData(Gxyz, CALIBRATION_TYPE_EXTERNAL_GYRO, 0, PACKET_RAW_CALIBRATION_DATA);
     config->calibration[isSecond?1:0].G_off[0] = Gxyz[0];
     config->calibration[isSecond?1:0].G_off[1] = Gxyz[1];
     config->calibration[isSecond?1:0].G_off[2] = Gxyz[2];
@@ -296,8 +286,8 @@ void MPU9250Sensor::startCalibration(int calibrationType) {
         calibrationDataMag[i * 3 + 0] = mx;
         calibrationDataMag[i * 3 + 1] = my;
         calibrationDataMag[i * 3 + 2] = mz;
-        sendRawCalibrationData(calibrationDataAcc, CALIBRATION_TYPE_EXTERNAL_ACCEL, 0, PACKET_RAW_CALIBRATION_DATA);
-        sendRawCalibrationData(calibrationDataMag, CALIBRATION_TYPE_EXTERNAL_MAG, 0, PACKET_RAW_CALIBRATION_DATA);
+        // sendRawCalibrationData(calibrationDataAcc, CALIBRATION_TYPE_EXTERNAL_ACCEL, 0, PACKET_RAW_CALIBRATION_DATA);
+        // sendRawCalibrationData(calibrationDataMag, CALIBRATION_TYPE_EXTERNAL_MAG, 0, PACKET_RAW_CALIBRATION_DATA);
         digitalWrite(CALIBRATING_LED, HIGH);
         delay(100);
     }
@@ -328,7 +318,7 @@ void MPU9250Sensor::startCalibration(int calibrationType) {
     }
 
     setConfig(*config);
-    sendCalibrationFinished(CALIBRATION_TYPE_EXTERNAL_ALL, 0, PACKET_RAW_CALIBRATION_DATA);
+    // sendCalibrationFinished(CALIBRATION_TYPE_EXTERNAL_ALL, 0, PACKET_RAW_CALIBRATION_DATA);
     Serial.println("[NOTICE] Finished Saving EEPROM");
     delay(4000);
 }

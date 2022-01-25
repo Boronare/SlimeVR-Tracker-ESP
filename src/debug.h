@@ -39,7 +39,7 @@
 #define batterySampleRate 10000
 
 // Setup for the Magnetometer
-#define useFullCalibrationMatrix true
+#define useFullCalibrationMatrix false
 
 #define sensorIdTime 1000
 #define sensorIdInterval 100

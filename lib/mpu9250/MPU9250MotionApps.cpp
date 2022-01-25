@@ -390,16 +390,16 @@ uint8_t MPU9250::dmpInitialize() {
     I2Cdev::writeByte(devAddr, MPU9250_RA_INT_PIN_CFG, 0x32);
 
     // enable MPU AUX I2C bypass mode
-    //DEBUG_PRINTLN(F("Enabling AUX I2C bypass mode..."));
-    //setI2CBypassEnabled(true);
+    DEBUG_PRINTLN(F("Enabling AUX I2C bypass mode..."));
+    setI2CBypassEnabled(true);
 
     DEBUG_PRINTLN(F("Setting Set/Reset period to power-down..."));
     //mag -> setMode(0);
     I2Cdev::writeByte(0x0D, 0x0B, 0x01);
 
-    DEBUG_PRINTLN(F("Setting magnetometer mode to Continuous/100Hz/8G/256..."));
+    DEBUG_PRINTLN(F("Setting magnetometer mode to Continuous/10Hz/8G/512Samples..."));
     //mag -> setMode(0x0F);
-    I2Cdev::writeByte(0x0D, 0x09, 0x40|0x20|0x04|0x01);
+    I2Cdev::writeByte(0x0D, 0x09, 0x00|0x10|0x00|0x01);
 
     // load DMP code into memory banks
     DEBUG_PRINT(F("Writing DMP code to MPU memory banks ("));
@@ -507,7 +507,7 @@ uint8_t MPU9250::dmpInitialize() {
             DEBUG_PRINTLN(F("Setting up AK8963 read slave 0..."));
             I2Cdev::writeByte(devAddr, MPU9250_RA_I2C_SLV0_ADDR, 0x0D|0x80);
             I2Cdev::writeByte(devAddr, MPU9250_RA_I2C_SLV0_REG,  0x00);
-            I2Cdev::writeByte(devAddr, MPU9250_RA_I2C_SLV0_CTRL, 0x80|0x40|0x00|0x10|0x06);
+            I2Cdev::writeByte(devAddr, MPU9250_RA_I2C_SLV0_CTRL, 0x80|0x00|0x00|0x10|0x06);
 
             // setup AK8963 (0x0C) as Slave 2 in write mode
             DEBUG_PRINTLN(F("Setting up AK8963 write slave 2..."));
