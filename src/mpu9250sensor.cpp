@@ -36,8 +36,8 @@
 
 constexpr float gscale = (250. / 32768.0) * (PI / 180.0); //gyro default 250 LSB per d/s -> rad/s
 
-#define SKIP_CALC_MAG_INTERVAL 10
-#define MAG_CORR_RATIO 0.2
+#define SKIP_CALC_MAG_INTERVAL 20
+#define MAG_CORR_RATIO 0.1
 
 namespace {
     void signalAssert() {
@@ -158,7 +158,10 @@ void MPU9250Sensor::motionLoop() {
             correction=getCorrection(Grav,Mxyz,quat);
             if(isSecond) skipCalcMag=SKIP_CALC_MAG_INTERVAL/2;
         }
-        else correction = correction.slerp(getCorrection(Grav,Mxyz,quat),MAG_CORR_RATIO);
+        else{
+            Quat newCorr = getCorrection(Grav,Mxyz,quat);
+            if(!__isnanf(newCorr.w)) correction = correction.slerp(newCorr,MAG_CORR_RATIO);
+        }
     }else skipCalcMag--;
     quaternion=correction*quat;
 #else
