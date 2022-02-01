@@ -499,10 +499,6 @@ uint8_t MPU9250::dmpInitialize() {
             DEBUG_PRINTLN(F("Setting zero-motion detection duration to 0..."));
             setZeroMotionDetectionDuration(0);
 
-            DEBUG_PRINTLN(F("Setting AK8963 to single measurement mode..."));
-            //mag -> setMode(1);
-            I2Cdev::writeByte(MPU9250_RA_MAG_ADDRESS, 0x0A, 0x01);
-
             // setup AK8963 (0x0C) as Slave 0 in read mode
             DEBUG_PRINTLN(F("Setting up AK8963 read slave 0..."));
             I2Cdev::writeByte(devAddr, MPU9250_RA_I2C_SLV0_ADDR, 0x0D|0x80);

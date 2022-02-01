@@ -41,9 +41,6 @@ THE SOFTWARE.
  */
 MPU9250::MPU9250() {
     devAddr = MPU9250_DEFAULT_ADDRESS;
-    asax = 1;
-    asay = 1;
-    asaz = 1;
 }
 
 /** Power on and prepare for general usage.
@@ -80,12 +77,6 @@ void MPU9250::initialize(uint8_t address) {
     setI2CMasterModeEnabled(true);
     // Set I2C clock speed to 400kHz
     setMasterClockSpeed(13);
-}
-
-void MPU9250::getMagnetometerAdjustments(float adjustments[3]) {
-    adjustments[0] = asax;
-    adjustments[1] = asay;
-    adjustments[2] = asaz;
 }
 
 uint8_t MPU9250::getAddr() {
@@ -1748,9 +1739,9 @@ void MPU9250::getMotion9(int16_t* ax, int16_t* ay, int16_t* az, int16_t* gx, int
 	//read mag from SLV0 external sensor registers
     I2Cdev::readBytes(devAddr, MPU9250_RA_EXT_SENS_DATA_00, 7, buffer);
     if (!(buffer[6] & 0x8)) { // Check ST2 for sensor overflow
-        *mx = (((int16_t)buffer[1]) << 8) | buffer[0];
-        *my = -((((int16_t)buffer[3]) << 8) | buffer[2]);
-        *mz = -((((int16_t)buffer[5]) << 8) | buffer[4]);
+        *my = -((((int16_t)buffer[1]) << 8) | buffer[0]);
+        *mx = -((((int16_t)buffer[3]) << 8) | buffer[2]);
+        *mz = ((((int16_t)buffer[5]) << 8) | buffer[4]);
     }
 }
 /** Get raw 6-axis motion sensor readings (accel/gyro).
