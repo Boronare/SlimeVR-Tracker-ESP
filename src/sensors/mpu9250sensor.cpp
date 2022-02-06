@@ -57,14 +57,18 @@ void MPU9250Sensor::motionSetup() {
     // turn on while flip back to calibrate. then, flip again after 5 seconds.    
     // TODO: Move calibration invoke after calibrate button on slimeVR server available 
     imu.getMotion6(&ax, &ay, &az, &dumb, &dumb, &dumb);
-    if(az<0 && 10.0*(ax*ax+ay*ay)<az*az) {
-        digitalWrite(CALIBRATING_LED, HIGH);
-        Serial.println("Calling Calibration... Flip front to confirm start calibration.");
-        delay(5000);
-        digitalWrite(CALIBRATING_LED, LOW);
-        imu.getMotion6(&ax, &ay, &az, &dumb, &dumb, &dumb);
-        if(az>0 && 10.0*(ax*ax+ay*ay)<az*az) 
-            startCalibration(0);
+    if(10.0*(ax*ax+ay*ay)<az*az) {
+        if(az<0){
+            LEDManager::on(CALIBRATING_LED);
+            Serial.println("Calling Calibration... Flip front to confirm start calibration.");
+            delay(5000);
+            LEDManager::off(CALIBRATING_LED);
+            imu.getMotion6(&ax, &ay, &az, &dumb, &dumb, &dumb);
+            if(az>0 && 10.0*(ax*ax+ay*ay)<az*az) 
+                startCalibration(0);
+        }else{
+            skipCalcMag=-1;
+        }
     }
 #ifndef _MAHONY_H_
     devStatus = imu.dmpInitialize();
@@ -146,8 +150,9 @@ void MPU9250Sensor::motionLoop() {
             Quat newCorr = getCorrection(Grav,Mxyz,quat);
             if(!__isnanf(newCorr.w)) correction = correction.slerp(newCorr,MAG_CORR_RATIO);
         }
-    }else skipCalcMag--;
-    quaternion=correction*quat;
+    }else if(skipCalcMag>0) skipCalcMag--;
+    if(skipCalcMag<0) quaternion=quat;
+    else quaternion=correction*quat;
 #else
     getMPUScaled();
     // Orientations of axes are set in accordance with the datasheet
