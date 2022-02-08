@@ -26,13 +26,17 @@
 
 #define IMU_MPU6050_RUNTIME_CALIBRATION // Comment to revert to startup/traditional-calibration
 #define BNO_USE_ARVR_STABILIZATION // Comment to not use stabilization for BNO085+ IMUs
+#define USE_6_AXIS true // uses 9 (with mag) if false (only for ICM-20948 currently)
+#define LOAD_BIAS 1 // Loads the bias values from NVS on start (ESP32 Only)
+#define SAVE_BIAS 1 // Periodically saves bias calibration data to NVS (ESP32 Only)
+#define ENABLE_TAP false // monitor accel for (tripple) tap events and send them. Uses more cpu, disable if problems. Server does nothing with value so disabled atm
 
 //Debug information
 //#define FULL_DEBUG
 #define serialDebug false // Set to true to get Serial output for debugging
 #define serialBaudRate 115200
 #define UPDATE_IMU_UNCONNECTED 1
-#define SEND_UPDATES_UNCONNECTED 1
+//#define SEND_UPDATES_UNCONNECTED 1
 #define LED_INTERVAL_STANDBUY 10000
 #define STATUS_PRINT_INTERVAL 15000
 #define ENABLE_LEDS true
@@ -56,7 +60,7 @@
 // Battery configuration
 #define batterySampleRate 10000
 #define BATTERY_LOW_VOLTAGE_DEEP_SLEEP false
-#define BATTERY_LOW_POWER_VOLTAGE 3.3 // Voltage to raise error
+#define BATTERY_LOW_POWER_VOLTAGE 3.3f // Voltage to raise error
 
 // Send updates over network only when changes are substantial
 // If "false" updates are sent at the sensor update rate (usually 100 TPS)
