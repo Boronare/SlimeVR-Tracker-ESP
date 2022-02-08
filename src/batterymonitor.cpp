@@ -22,7 +22,7 @@
 */
 #include "batterymonitor.h"
 
-#if BATTERY_MONITOR == BAT_INTERNAL || BATTERY_MONITOR == BAT_INTERNAL_MCP3021
+#if ESP8266 && (BATTERY_MONITOR == BAT_INTERNAL || BATTERY_MONITOR == BAT_INTERNAL_MCP3021)
 ADC_MODE(ADC_VCC);
 #endif
 
@@ -51,7 +51,7 @@ void BatteryMonitor::Loop()
         if (now_ms - last_battery_sample >= batterySampleRate)
         {
             voltage = -1;
-            #if BATTERY_MONITOR == BAT_INTERNAL || BATTERY_MONITOR == BAT_INTERNAL_MCP3021
+            #if ESP8266 && (BATTERY_MONITOR == BAT_INTERNAL || BATTERY_MONITOR == BAT_INTERNAL_MCP3021)
                 last_battery_sample = now_ms;
                 auto level = ESP.getVcc();
                 if (level > voltage_3_3)
@@ -95,18 +95,18 @@ void BatteryMonitor::Loop()
             if (voltage > 0) //valid measurement
             {
                 // Estimate battery level, 3.2V is 0%, 4.17V is 100% (1.0)
-                if (voltage > 3.975)
-                    level = (voltage - 2.920) * 0.8;
-                else if (voltage > 3.678)
-                    level = (voltage - 3.300) * 1.25;
-                else if (voltage > 3.489)
-                    level = (voltage - 3.400) * 1.7;
-                else if (voltage > 3.360)
-                    level = (voltage - 3.300) * 0.8;
+                if (voltage > 3.975f)
+                    level = (voltage - 2.920f) * 0.8f;
+                else if (voltage > 3.678f)
+                    level = (voltage - 3.300f) * 1.25f;
+                else if (voltage > 3.489f)
+                    level = (voltage - 3.400f) * 1.7f;
+                else if (voltage > 3.360f)
+                    level = (voltage - 3.300f) * 0.8f;
                 else
-                    level = (voltage - 3.200) * 0.3;
+                    level = (voltage - 3.200f) * 0.3f;
 
-                level = (level - 0.05) / 0.95; // Cut off the last 5% (3.36V)
+                level = (level - 0.05f) / 0.95f; // Cut off the last 5% (3.36V)
 
                 if (level > 1)
                     level = 1;
@@ -114,7 +114,7 @@ void BatteryMonitor::Loop()
                     level = 0;
                 Network::sendBatteryLevel(voltage, level);
                 #ifdef BATTERY_LOW_POWER_VOLTAGE
-                    if (voltage < (float)BATTERY_LOW_POWER_VOLTAGE)
+                    if (voltage < BATTERY_LOW_POWER_VOLTAGE)
                     {
                         #if defined(BATTERY_LOW_VOLTAGE_DEEP_SLEEP) && BATTERY_LOW_VOLTAGE_DEEP_SLEEP
                             ESP.deepSleep(0);

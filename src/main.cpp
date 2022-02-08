@@ -38,7 +38,6 @@ int sensorToCalibrate = -1;
 bool blinking = false;
 unsigned long blinkStart = 0;
 unsigned long loopTime = 0;
-unsigned long last_rssi_sample = 0;
 bool secondImuActive = false;
 BatteryMonitor battery;
 
@@ -90,7 +89,7 @@ void loop()
     OTA::otaUpdate();
     Network::update(sensors.getFirst(), sensors.getSecond());
 #ifndef UPDATE_IMU_UNCONNECTED
-    if (isConnected())
+    if (ServerConnection::isConnected())
     {
 #endif
         sensors.motionLoop();
@@ -99,7 +98,7 @@ void loop()
 #endif
     // Send updates
 #ifndef SEND_UPDATES_UNCONNECTED
-    if (isConnected())
+    if (ServerConnection::isConnected())
     {
 #endif
         sensors.sendData();
@@ -109,12 +108,12 @@ void loop()
     battery.Loop();
 
 #ifdef TARGET_LOOPTIME_MICROS
-    auto elapsed = (micros() - loopTime);
+    long elapsed = (micros() - loopTime);
     if (elapsed < TARGET_LOOPTIME_MICROS)
     {
-        auto sleepus = TARGET_LOOPTIME_MICROS - elapsed - 100;//µs to sleep
-        auto sleepms = sleepus / 1000;//ms to sleep
-        if (sleepms) // if >= 1 ms
+        long sleepus = TARGET_LOOPTIME_MICROS - elapsed - 100;//µs to sleep
+        long sleepms = sleepus / 1000;//ms to sleep
+        if(sleepms > 0) // if >= 1 ms
         {
             delay(sleepms); // sleep ms = save power
             sleepus -= sleepms * 1000;
@@ -126,10 +125,4 @@ void loop()
     }
     loopTime = micros();
 #endif
-    // TODO Move to WiFi handler
-    if(micros() - last_rssi_sample >= 2000) {
-        last_rssi_sample = micros();
-        uint8_t signalStrength = WiFi.RSSI();
-        Network::sendSignalStrength(signalStrength);
-    }
 }
