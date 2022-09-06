@@ -46,7 +46,7 @@
 #define STATUS_LED LED_BUILTIN
 
 // Determines how often we sample and send data
-#define samplingRateInMillis 10
+#define samplingRateInMillis 20
 
 // Sleeping options
 #define POWERSAVING_MODE POWER_SAVING_MINIMUM

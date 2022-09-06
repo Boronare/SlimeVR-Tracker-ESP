@@ -22,7 +22,7 @@
 */
 #include "sensor.h"
 
-#include <MPU9250_6Axis_MotionApps_V6_12.h>
+#include <MPU9250MotionApps.h>
 
 class MPU9250Sensor : public Sensor
 {

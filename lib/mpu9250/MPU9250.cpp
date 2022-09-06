@@ -60,24 +60,6 @@ void MPU9250_Base::initialize(uint8_t address) {
     // Enable Magnetometer
     initilaizeMagnetometer();
 
-    // Enable I2C bypass to access magnetometer
-    setI2CBypassEnabled(true);
-
-    // Enable magnetometer
-    I2Cdev::writeByte(0x0D, 0x0B, 0x01);
-    // Set continuous reading mode 200hz
-    I2Cdev::writeByte(0x0D, 0x09, 0x85);
-
-    setI2CBypassEnabled(false);
-
-    // Set up slave 0 for reading
-    I2Cdev::writeByte(devAddr, MPU9250_RA_I2C_SLV0_ADDR, 0x0D|0x80);
-    I2Cdev::writeByte(devAddr, MPU9250_RA_I2C_SLV0_REG,  0x00);
-    I2Cdev::writeByte(devAddr, MPU9250_RA_I2C_SLV0_CTRL, 0x96);
-    delay(10);
-
-    // Enable I2C master to read from magnetometer
-    setI2CMasterModeEnabled(true);
     // Set I2C clock speed to 400kHz
     setMasterClockSpeed(13);
 }
@@ -3333,7 +3315,7 @@ void MPU9250_Base::initilaizeMagnetometer() {
     I2Cdev::writeByte(0x0D, 0x0B, 0x01);
 
     //mag -> setMode(0x0F);
-    I2Cdev::writeByte(0x0D, 0x09, 0x00|0x10|0x00|0x01);
+    I2Cdev::writeByte(0x0D, 0x09, 0x00|0x01|0x00|0x01);
 
     delay(10);
 
@@ -3385,11 +3367,14 @@ void MPU9250_Base::getMagnetometerAdjustments(float adjustments[3]) {
 void MPU9250_Base::getMagnetometer(int16_t* mx, int16_t* my, int16_t* mz) {
 	//read mag from SLV0 external sensor registers
     I2Cdev::readBytes(devAddr, MPU9250_RA_EXT_SENS_DATA_00, 7, buffer);
-    if (!(buffer[6] & 0x8)) { // Check ST2 for sensor overflow
         *my = -((((int16_t)buffer[1]) << 8) | buffer[0]);
         *mx = -((((int16_t)buffer[3]) << 8) | buffer[2]);
         *mz = ((((int16_t)buffer[5]) << 8) | buffer[4]);
-    }
+    // I2Cdev::readBytes(0x0D, 0x00, 6, buffer);
+    //     *mx = ((((int16_t)buffer[1]) << 8) | buffer[0]);
+    //     *my = ((((int16_t)buffer[3]) << 8) | buffer[2]);
+    //     *mz = -((((int16_t)buffer[5]) << 8) | buffer[4]);
+    Serial.printf("%+5d %+5d %+5d\n",*mx,*my,*mz);
 }
 
 /** Get X-axis magnetometer reading.

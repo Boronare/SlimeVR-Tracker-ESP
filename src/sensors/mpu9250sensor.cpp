@@ -40,6 +40,7 @@ constexpr float gscale = (250. / 32768.0) * (PI / 180.0); //gyro default 250 LSB
 void MPU9250Sensor::motionSetup() {
     DeviceConfig * const config = getConfigPtr();
     calibration = &config->calibration[sensorId];
+    Serial.printf("MagCali : %f %f %f",calibration->M_B[0],calibration->M_B[1],calibration->M_B[2]);
     // initialize device
     imu.initialize(addr);
     if(!imu.testConnection()) {
@@ -63,7 +64,7 @@ void MPU9250Sensor::motionSetup() {
             delay(5000);
             digitalWrite(CALIBRATING_LED, LOW);
             imu.getAcceleration(&ax, &ay, &az);
-            if(az>0 && 10.0*(ax*ax+ay*ay)<az*az) 
+            if(az>0 && 5.0*(ax*ax+ay*ay)<az*az) 
                 startCalibration(0);
         }else skipCalcMag=-1;
     }
@@ -250,7 +251,7 @@ void MPU9250Sensor::startCalibration(int calibrationType) {
         Network::sendRawCalibrationData(calibrationDataAcc, CALIBRATION_TYPE_EXTERNAL_ACCEL, 0);
         Network::sendRawCalibrationData(calibrationDataMag, CALIBRATION_TYPE_EXTERNAL_MAG, 0);
         LEDManager::off(CALIBRATING_LED);
-        delay(250);
+        delay(100);
     }
     Serial.println("[NOTICE] Now Calculate Calibration data");
 
