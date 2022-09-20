@@ -90,7 +90,9 @@ public:
 
 	Vector3 rotref_posscale_decomposition(Basis& rotref) const;
 
-	Vector3 get_euler_xyz() const;
+	Vector3 get_euler_xyz() {
+		    return Vector3(atan2(-elements[1][2],elements[2][2]),asin(elements[0][2]),atan2(-elements[0][1],elements[0][0]));
+	}
 	void set_euler_xyz(const Vector3& p_euler);
 
 	Vector3 get_euler_xzy() const;
@@ -99,7 +101,9 @@ public:
 	Vector3 get_euler_yzx() const;
 	void set_euler_yzx(const Vector3& p_euler);
 
-	Vector3 get_euler_yxz() const;
+	Vector3 get_euler_yxz() const {
+		return Vector3(atan2(elements[0][2],elements[2][2]),-asin(elements[1][2]),atan2(elements[1][0],elements[1][1]));
+	}
 	void set_euler_yxz(const Vector3& p_euler);
 
 	Vector3 get_euler_zxy() const;
@@ -109,7 +113,12 @@ public:
 	void set_euler_zyx(const Vector3& p_euler);
 
 	Quat get_quat() const;
-	void set_quat(const Quat& p_quat);
+	void set_quat(const Quat& p_quat){
+		float w=p_quat.w,x=p_quat.x,y=p_quat.y,z=p_quat.z;
+		elements[0]=Vector3(2*(0.5-y*y-z*z),2*(x*y-w*z),2*(x*z-w*y));
+		elements[1]=Vector3(2*(x*y-w*z),2*(0.5-x*x-z*z),2*(y*z-w*x));
+		elements[2]=Vector3(2*(x*z-w*y),2*(y*z-w*x),2*(0.5-x*x-y*y));
+	}
 
 	Vector3 get_euler() const { return get_euler_yxz(); }
 	void set_euler(const Vector3& p_euler) { set_euler_yxz(p_euler); }

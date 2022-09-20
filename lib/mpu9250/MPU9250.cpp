@@ -3273,6 +3273,7 @@ void MPU9250_Base::PrintActiveOffsets() {
  * ================================================================ */
 int8_t MPU9250_Base::GetCurrentFIFOPacket(uint8_t *data, uint8_t length) { // overflow proof
     uint16_t fifoCounter = getFIFOCount();
+    Serial.printf("fifoCounter : %d / length: %d",fifoCounter, length);
     if (fifoCounter < length) { // If FIFO counter is smaller than packet size - there's nothing to read yet
         return 0;
     } else if (fifoCounter > 192) { // If FIFO counter exceeds our buffer size - read the first packet to keep it smooth and reset FIFO

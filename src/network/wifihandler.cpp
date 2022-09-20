@@ -60,6 +60,7 @@ IPAddress WiFiNetwork::getAddress() {
 
 void WiFiNetwork::setUp() {
     Serial.println("[NOTICE] WiFi: Setting up WiFi");
+    WiFi.setOutputPower(0);
     WiFi.persistent(true);
     WiFi.mode(WIFI_STA);
     WiFi.hostname("SlimeVR FBT Tracker");

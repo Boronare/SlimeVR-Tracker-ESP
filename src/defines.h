@@ -26,8 +26,9 @@
 // ================================================
 
 // Set parameters of IMU and board used
-#define IMU IMU_BNO085
+#define IMU IMU_QMI8610
 #define SECOND_IMU IMU
+// #define BOARD BOARD_CUSTOM
 #define BOARD BOARD_SLIMEVR
 #define IMU_ROTATION DEG_90
 #define SECOND_IMU_ROTATION DEG_270
@@ -35,7 +36,7 @@
 // Battery monitoring options (comment to disable):
 // BAT_EXTERNAL for ADC pin, BAT_INTERNAL for internal - can detect only low battery, BAT_MCP3021 for external ADC
 #define BATTERY_MONITOR BAT_EXTERNAL
-#define BATTERY_SHIELD_RESISTANCE 180 //130k BatteryShield, 180k SlimeVR or fill in external resistor value in kOhm
+#define BATTERY_SHIELD_RESISTANCE 420 //130k BatteryShield, 180k SlimeVR or fill in external resistor value in kOhm
 
 // Board-specific configurations
 #if BOARD == BOARD_SLIMEVR || BOARD == BOARD_SLIMEVR_DEV
@@ -45,8 +46,8 @@
   #define PIN_IMU_INT_2 13
   #define PIN_BATTERY_LEVEL 17
 #elif BOARD == BOARD_NODEMCU || BOARD == BOARD_WEMOSD1MINI
-  #define PIN_IMU_SDA D2
-  #define PIN_IMU_SCL D1
+  #define PIN_IMU_SDA D1
+  #define PIN_IMU_SCL D2
   #define PIN_IMU_INT D5
   #define PIN_IMU_INT_2 D6
   #define PIN_BATTERY_LEVEL A0
@@ -63,11 +64,16 @@
   #define PIN_IMU_INT_2 13
   #define PIN_BATTERY_LEVEL A0
 #elif BOARD == BOARD_CUSTOM
-  // Define pins by the examples above
+  #define PIN_IMU_SDA 12
+  #define PIN_IMU_SCL 13
+  #define PIN_IMU_INT 16
+  #define PIN_IMU_INT_2 16
+  #define PIN_BATTERY_LEVEL A0
 #elif BOARD == BOARD_WROOM32
-  #define PIN_IMU_SDA 21
-  #define PIN_IMU_SCL 22
+  #define PIN_IMU_SDA 9
+  #define PIN_IMU_SCL 8
   #define PIN_IMU_INT 23
   #define PIN_IMU_INT_2 25
-  #define PIN_BATTERY_LEVEL 36
+  #define PIN_BATTERY_LEVEL 2
+  #define ENABLE_LEDS false
 #endif
