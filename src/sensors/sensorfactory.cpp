@@ -29,7 +29,7 @@
 #include "mpu6050sensor.h"
 #include "bmi160sensor.h"
 #include "icm20948sensor.h"
-#include "qmi8610sensor.h"
+#include "qmi8658sensor.h"
 
 SensorFactory::SensorFactory()
 {
@@ -63,8 +63,8 @@ void SensorFactory::create()
         this->sensor1 = new ICM20948Sensor();
         first_addr = I2CSCAN::pickDevice(0x68, 0x69, true);
     #elif IMU == IMU_QMI8610
-        this->sensor1 = new QMI8610Sensor();
-        first_addr = I2CSCAN::pickDevice(0x6a, 0x6b, true);
+        this->sensor1 = new QMI8658Sensor();
+        first_addr = I2CSCAN::pickDevice(0x6b, 0x6a, true);
     #else
     #error Unsupported IMU
     #endif
@@ -95,8 +95,8 @@ void SensorFactory::create()
         this->sensor2 = new ICM20948Sensor();
         second_addr = I2CSCAN::pickDevice(0x69, 0x68, true);
     #elif SECOND_IMU == IMU_QMI8610
-        this->sensor2 = new QMI8610Sensor();
-        second_addr = I2CSCAN::pickDevice(0x6b, 0x6a, false);
+        this->sensor2 = new QMI8658Sensor();
+        second_addr = I2CSCAN::pickDevice(0x6a, 0x6b, false);
     #else
     #error Unsupported secondary IMU
     #endif

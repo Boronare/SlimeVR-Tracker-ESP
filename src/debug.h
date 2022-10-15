@@ -46,7 +46,7 @@
 #define STATUS_LED LED_BUILTIN
 
 // Determines how often we sample and send data
-#define samplingRateInMillis 20
+#define samplingRateInMillis 100
 
 // Sleeping options
 #define POWERSAVING_MODE POWER_SAVING_MINIMUM
@@ -68,7 +68,7 @@
 // Experimental
 #define OPTIMIZE_UPDATES true
 
-#define I2C_SPEED 400000
+#define I2C_SPEED 100000
 
 #define FIRMWARE_BUILD_NUMBER 9
 #define FIRMWARE_VERSION "0.2.0"
