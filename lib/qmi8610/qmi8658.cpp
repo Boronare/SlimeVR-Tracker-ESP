@@ -12,16 +12,16 @@ void QMI8658::initialize(uint8_t addr)
     devAddr = addr;
     /* Issue a soft-reset to bring the device into a clean state */
     I2Cdev::writeByte(devAddr, QMI8658_RA_RESET, 0xB0);
-    delay(100);
+    delay(1000);
     I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL1, 0b11101000);
     /* config default accelerometer */
-    I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL2, 0b10100100);
+    I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL2, 0b00100100);
     /* config default gyroscope */
-    I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL3, 0b11010100);
+    I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL3, 0b01010100);
     /* config default filter setting */
     I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL5, 0b11011101);
     /* config default AttitudeEngine Settings */
-    I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL6, 0b00100110);
+    I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL6, 0b00100100);
     /* config Mag/Gyr/Acc Enabled/Disabled */
     I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL7, 0b11101111);
     I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL8, 0b11100000);
