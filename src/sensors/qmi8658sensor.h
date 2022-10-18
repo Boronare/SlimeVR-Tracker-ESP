@@ -25,19 +25,25 @@
 
 #include <QMI8658.h>
 
-class QMI8658Sensor : public Sensor {
-    public:
-        QMI8658Sensor(){};
-        ~QMI8658Sensor(){};
-        void motionSetup() override final;
-        void motionLoop() override final;
-        void getScaledValues(float Gxyz[3], float Axyz[3]);
-        float getTemperature();
-    private:
-        QMI8658 imu {};
-        CalibrationConfig * calibration;
-        float q[4] {1.0f, 0.0f, 0.0f, 0.0f};
-        // Loop timing globals
-        uint32_t now = 0, last = 0;   //micros() timers
-        float deltat = 0;                  //loop time in seconds
+class QMI8658Sensor : public Sensor
+{
+public:
+    QMI8658Sensor(){};
+    ~QMI8658Sensor(){};
+    void motionSetup() override final;
+    void motionLoop() override final;
+    void getScaledValues(float Gxyz[3], float Axyz[3]);
+    float getTemperature();
+    void getValueScaled();
+
+private:
+    QMI8658 imu{};
+    CalibrationConfig *calibration;
+    float Axyz[3]{};
+    float Gxyz[3]{};
+    float Mxyz[3]{};
+    float q[4]{1.0f, 0.0f, 0.0f, 0.0f};
+    // Loop timing globals
+    uint32_t now = 0, last = 0; // micros() timers
+    float deltat = 0;           // loop time in seconds
 };

@@ -1,40 +1,13 @@
-/*
-    SlimeVR Code is placed under the MIT license
-    Copyright (c) 2021 S.J. Remington, SlimeVR contributors
-
-    Permission is hereby granted, free of charge, to any person obtaining a copy
-    of this software and associated documentation files (the "Software"), to deal
-    in the Software without restriction, including without limitation the rights
-    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-    copies of the Software, and to permit persons to whom the Software is
-    furnished to do so, subject to the following conditions:
-
-    The above copyright notice and this permission notice shall be included in
-    all copies or substantial portions of the Software.
-
-    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-    THE SOFTWARE.
-*/
-
 #include "qmi8658sensor.h"
+#include "mahony.h"
 
-// Typical sensitivity at 25C
-// See p. 9 of https://www.mouser.com/datasheet/2/783/BST-BMI160-DS000-1509569.pdf
-// 65.6 LSB/deg/s = 500 deg/s
-#define TYPICAL_SENSITIVITY_LSB 65.6
-
-// Scale conversion steps: LSB/°/s -> °/s -> step/°/s -> step/rad/s
-constexpr float GSCALE = ((32768. / TYPICAL_SENSITIVITY_LSB) / 32768.) * (PI / 180.0);
-
-void QMI8658Sensor::motionSetup() {
+constexpr float gscale = (32. / 32768.0) * (PI / 180.0); // gyro default 250 LSB per d/s -> rad/s
+void QMI8658Sensor::motionSetup()
+{
     // initialize device
     imu.initialize(addr);
-    if(!imu.testConnection()) {
+    if (!imu.testConnection())
+    {
         Serial.print("[ERR] Can't communicate with QMI8658, response 0x");
         Serial.println(imu.getDeviceID(), HEX);
         LEDManager::signalAssert();
@@ -48,17 +21,55 @@ void QMI8658Sensor::motionSetup() {
 
     working = true;
 }
+void QMI8658Sensor::getValueScaled()
+{
+    float temp[3];
+    int i;
+    int16_t ax, ay, az, gx, gy, gz, mx, my, mz;
+    imu.getMotion9(&ax, &ay, &az, &gx, &gy, &gz, &mx, &my, &mz);
 
-void QMI8658Sensor::motionLoop() {
-    int16_t ax,ay,az,gx,gy,gz,mx,my,mz;
-    int16_t dqw,dqx,dqy,dqz;
-    imu.getMotion6(&ax,&ay,&az,&gx,&gy,&gz);
-    imu.getQuatDiff(&dqw,&dqx,&dqy,&dqz);
+    Gxyz[0] = (float)gx * gscale;
+    Gxyz[1] = (float)gy * gscale;
+    Gxyz[2] = (float)gz * gscale;
+
+    Axyz[0] = (float)ax;
+    Axyz[1] = (float)ay;
+    Axyz[2] = (float)az;
+
+    // Orientations of axes are set in accordance with the datasheet
+    // See Section 9.1 Orientation of Axes
+    // https://invensense.tdk.com/wp-content/uploads/2015/02/PS-MPU-9250A-01-v1.1.pdf
+    Mxyz[0] = (float)mx;
+    Mxyz[1] = (float)my;
+    Mxyz[2] = (float)mz;
+// apply offsets and scale factors from Magneto
+#if useFullCalibrationMatrix == true
+    for (i = 0; i < 3; i++)
+        temp[i] = (Mxyz[i] - calibration->M_B[i]);
+    Mxyz[0] = calibration->M_Ainv[0][0] * temp[0] + calibration->M_Ainv[0][1] * temp[1] + calibration->M_Ainv[0][2] * temp[2];
+    Mxyz[1] = calibration->M_Ainv[1][0] * temp[0] + calibration->M_Ainv[1][1] * temp[1] + calibration->M_Ainv[1][2] * temp[2];
+    Mxyz[2] = calibration->M_Ainv[2][0] * temp[0] + calibration->M_Ainv[2][1] * temp[1] + calibration->M_Ainv[2][2] * temp[2];
+// #else
+//     for (i = 0; i < 3; i++)
+//         Mxyz[i] = (Mxyz[i] - calibration->M_B[i]);
+#endif
+}
+void QMI8658Sensor::motionLoop()
+{
+    // int16_t ax, ay, az, gx, gy, gz, mx, my, mz;
+    // int16_t dqw, dqx, dqy, dqz;
+    // imu.getQuatDiff(&dqw, &dqx, &dqy, &dqz);
+    // imu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+    unsigned long now = micros();
+    unsigned long deltat = now - last; // seconds since last update
+    last = now;
+    getValueScaled();
+    Serial.printf("A : %+6.0f %+6.0f %+6.0f / G : %+f %+f %+f / M: %+6.0f %+6.0f %+6.0f / Q : %+f %+f %+f %+f\n", Axyz[0], Axyz[1], Axyz[2], Gxyz[0], Gxyz[1], Gxyz[2], Mxyz[0], Mxyz[1], Mxyz[2], q[0], q[1], q[2], q[3]);
+    mahonyQuaternionUpdate(q, Axyz[0], Axyz[1], Axyz[2], Gxyz[0], Gxyz[1], Gxyz[2], Mxyz[0], Mxyz[1], Mxyz[2], deltat * 1.0e-6);
     // imu.getMagneto(&mx,&my,&mz);
-    Serial.printf("A : %+5d %+5d %+5d / G : %+5d %+5d %+5d / M : %+5d %+5d %+5d / dQ : %+5d %+5d %+5d %+5d\n",ax,ay,az,gx,gy,gz,mx,my,mz,dqw,dqx,dqy,dqz);
 }
 
 float QMI8658Sensor::getTemperature()
 {
-    return imu.getTemperature()*1.0;
+    return imu.getTemperature() * 1.0;
 }
