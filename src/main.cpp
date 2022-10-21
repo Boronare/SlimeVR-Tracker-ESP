@@ -1,6 +1,6 @@
 /*
     SlimeVR Code is placed under the MIT license
-    Copyright (c) 2021 Eiren Rain
+    Copyright (c) 2021 Eiren Rain & SlimeVR contributors
 
     Permission is hereby granted, free of charge, to any person obtaining a copy
     of this software and associated documentation files (the "Software"), to deal
@@ -23,17 +23,24 @@
 
 #include "Wire.h"
 #include "ota.h"
-#include "sensors/sensorfactory.h"
-#include "configuration.h"
+#include "sensors/SensorManager.h"
+#include "configuration/Configuration.h"
 #include "network/network.h"
 #include "globals.h"
 #include "credentials.h"
 #include <i2cscan.h>
 #include "serial/serialcommands.h"
-#include "ledmgr.h"
+#include "LEDManager.h"
+#include "status/StatusManager.h"
 #include "batterymonitor.h"
+#include "logging/Logger.h"
 
-SensorFactory sensors {};
+SlimeVR::Logging::Logger logger("SlimeVR");
+SlimeVR::Sensors::SensorManager sensorManager;
+SlimeVR::LEDManager ledManager(LED_PIN);
+SlimeVR::Status::StatusManager statusManager;
+SlimeVR::Configuration::Configuration configuration;
+
 int sensorToCalibrate = -1;
 bool blinking = false;
 unsigned long blinkStart = 0;
@@ -43,69 +50,69 @@ BatteryMonitor battery;
 
 void setup()
 {
-    //wifi_set_sleep_type(NONE_SLEEP_T);
-    // Glow diode while loading
-#if ENABLE_LEDS
-    pinMode(LOADING_LED, OUTPUT);
-    pinMode(CALIBRATING_LED, OUTPUT);
-    LEDManager::off(CALIBRATING_LED);
-    LEDManager::on(LOADING_LED);
+    Serial.begin(serialBaudRate);
+
+#ifdef ESP32C3 
+    // Wait for the Computer to be able to connect.
+    delay(2000);
 #endif
 
-    Serial.begin(serialBaudRate);
+    Serial.println();
+    Serial.println();
+    Serial.println();
+
+    logger.info("SlimeVR v" FIRMWARE_VERSION " starting up...");
+
+    statusManager.setStatus(SlimeVR::Status::LOADING, true);
+
+    ledManager.setup();
+    configuration.setup();
+
     SerialCommands::setUp();
-    Serial.println();
-    Serial.println();
-    Serial.println();
+
 #if IMU == IMU_MPU6500 || IMU == IMU_MPU6050 || IMU == IMU_MPU9250
-    I2CSCAN::clearBus(PIN_IMU_SDA, PIN_IMU_SCL); // Make sure the bus isn't suck when reseting ESP without powering it down
+    I2CSCAN::clearBus(PIN_IMU_SDA, PIN_IMU_SCL); // Make sure the bus isn't stuck when resetting ESP without powering it down
     // Do it only for MPU, cause reaction of BNO to this is not investigated yet
 #endif
     // join I2C bus
-    Wire.begin(PIN_IMU_SDA, PIN_IMU_SCL);
+
+#if ESP32
+    // For some unknown reason the I2C seem to be open on ESP32-C3 by default. Let's just close it before opening it again. (The ESP32-C3 only has 1 I2C.)
+    Wire.end();
+#endif
+
+    // using `static_cast` here seems to be better, because there are 2 similar function signatures
+    Wire.begin(static_cast<int>(PIN_IMU_SDA), static_cast<int>(PIN_IMU_SCL)); 
+
 #ifdef ESP8266
     Wire.setClockStretchLimit(150000L); // Default stretch limit 150mS
 #endif
     Wire.setClock(I2C_SPEED);
 
-    getConfigPtr();
     // Wait for IMU to boot
     delay(500);
     
-    sensors.create();
-    sensors.motionSetup();
+    sensorManager.setup();
     
     Network::setUp();
     OTA::otaSetup(otaPassword);
     battery.Setup();
-    LEDManager::off(LOADING_LED);
+
+    statusManager.setStatus(SlimeVR::Status::LOADING, false);
+
+    sensorManager.postSetup();
+
     loopTime = micros();
 }
 
 void loop()
 {
-    LEDManager::ledStatusUpdate();
     SerialCommands::update();
     OTA::otaUpdate();
-    Network::update(sensors.getFirst(), sensors.getSecond());
-#ifndef UPDATE_IMU_UNCONNECTED
-    if (ServerConnection::isConnected())
-    {
-#endif
-        sensors.motionLoop();
-#ifndef UPDATE_IMU_UNCONNECTED
-    }
-#endif
-    // Send updates
-#ifndef SEND_UPDATES_UNCONNECTED
-    if (ServerConnection::isConnected())
-    {
-#endif
-        sensors.sendData();
-#ifndef SEND_UPDATES_UNCONNECTED
-    }
-#endif
+    Network::update(sensorManager.getFirst(), sensorManager.getSecond());
+    sensorManager.update();
     battery.Loop();
+    ledManager.update();
 
 #ifdef TARGET_LOOPTIME_MICROS
     long elapsed = (micros() - loopTime);

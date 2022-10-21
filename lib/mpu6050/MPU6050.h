@@ -42,13 +42,10 @@ THE SOFTWARE.
 // supporting link:  http://forum.arduino.cc/index.php?&topic=143444.msg1079517#msg1079517
 // also: http://forum.arduino.cc/index.php?&topic=141571.msg1062899#msg1062899s
 
-#ifdef __AVR__
+#if (defined(__AVR__) || defined(ESP8266))
 #include <avr/pgmspace.h>
 #elif defined(ESP32)
     #include <pgmspace.h>
-    #ifndef BUFFER_LENGTH
-        #define BUFFER_LENGTH 32
-    #endif
 #else
 //#define PROGMEM /* empty */
 //#define pgm_read_byte(x) (*(x))

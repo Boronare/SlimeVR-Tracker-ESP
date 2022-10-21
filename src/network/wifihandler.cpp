@@ -1,6 +1,6 @@
 /*
     SlimeVR Code is placed under the MIT license
-    Copyright (c) 2021 Eiren Rain
+    Copyright (c) 2021 Eiren Rain & SlimeVR contributors
 
     Permission is hereby granted, free of charge, to any person obtaining a copy
     of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,8 @@
 */
 #include "globals.h"
 #include "network.h"
-#include "ledmgr.h"
+#include "logging/Logger.h"
+#include "GlobalVars.h"
 #if !ESP8266
 #include "esp_wifi.h"
 #endif
@@ -34,19 +35,37 @@ uint8_t wifiState = 0;
 bool hadWifi = false;
 unsigned long last_rssi_sample = 0;
 
-void reportWifiError() {
-    if(lastWifiReportTime + 1000 < millis()) {
+// TODO: Cleanup with proper classes
+SlimeVR::Logging::Logger wifiHandlerLogger("WiFiHandler");
+
+void reportWifiError()
+{
+    if (lastWifiReportTime + 1000 < millis())
+    {
         lastWifiReportTime = millis();
         Serial.print(".");
     }
 }
 
-bool WiFiNetwork::isConnected() {
+void setStaticIPIfDefined()
+{
+#ifdef WIFI_USE_STATICIP
+    const IPAddress ip(WIFI_STATIC_IP);
+    const IPAddress gateway(WIFI_STATIC_GATEWAY);
+    const IPAddress subnet(WIFI_STATIC_SUBNET);
+    WiFi.config(ip, gateway, subnet);
+#endif
+}
+
+bool WiFiNetwork::isConnected()
+{
     return isWifiConnected;
 }
 
-void WiFiNetwork::setWiFiCredentials(const char * SSID, const char * pass) {
+void WiFiNetwork::setWiFiCredentials(const char *SSID, const char *pass)
+{
     stopProvisioning();
+    setStaticIPIfDefined();
     WiFi.begin(SSID, pass);
     // Reset state, will get back into provisioning if can't connect
     hadWifi = false;
@@ -54,22 +73,24 @@ void WiFiNetwork::setWiFiCredentials(const char * SSID, const char * pass) {
     wifiConnectionTimeout = millis();
 }
 
-IPAddress WiFiNetwork::getAddress() {
+IPAddress WiFiNetwork::getAddress()
+{
     return WiFi.localIP();
 }
 
-void WiFiNetwork::setUp() {
-    Serial.println("[NOTICE] WiFi: Setting up WiFi");
-    WiFi.setOutputPower(0);
+void WiFiNetwork::setUp()
+{
+    wifiHandlerLogger.info("Setting up WiFi");
     WiFi.persistent(true);
     WiFi.mode(WIFI_STA);
     WiFi.hostname("SlimeVR FBT Tracker");
-    Serial.printf("[NOTICE] WiFi: Loaded credentials for SSID %s and pass length %d\n", WiFi.SSID().c_str(), WiFi.psk().length());
+    wifiHandlerLogger.info("Loaded credentials for SSID %s and pass length %d", WiFi.SSID().c_str(), WiFi.psk().length());
+    setStaticIPIfDefined();
     wl_status_t status = WiFi.begin(); // Should connect to last used access point, see https://arduino-esp8266.readthedocs.io/en/latest/esp8266wifi/station-class.html#begin
-    Serial.printf("[NOTICE] Status: %d", status);
+    wifiHandlerLogger.debug("Status: %d", status);
     wifiState = 1;
     wifiConnectionTimeout = millis();
-    
+
 #if ESP8266
 #if POWERSAVING_MODE == POWER_SAVING_NONE
     WiFi.setSleepMode(WIFI_NONE_SLEEP);
@@ -96,61 +117,75 @@ void WiFiNetwork::setUp() {
     }
     else
     {
-        Serial.println("[ERR] Unable to get wifi config, power saving not enabled!");
+        wifiHandlerLogger.error("Unable to get WiFi config, power saving not enabled!");
     }
 #endif
 #endif
 }
 
-void onConnected() {
+void onConnected()
+{
     WiFiNetwork::stopProvisioning();
-    LEDManager::unsetLedStatus(LED_STATUS_WIFI_CONNECTING);
+    statusManager.setStatus(SlimeVR::Status::WIFI_CONNECTING, false);
     isWifiConnected = true;
     hadWifi = true;
-    Serial.printf("[NOTICE] WiFi: Connected successfully to SSID '%s', ip address %s\n", WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
+    wifiHandlerLogger.info("Connected successfully to SSID '%s', ip address %s", WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
 }
 
-void WiFiNetwork::upkeep() {
+void WiFiNetwork::upkeep()
+{
     upkeepProvisioning();
-    if(WiFi.status() != WL_CONNECTED) {
-        if(isWifiConnected) {
-            Serial.printf("[NOTICE] WiFi: Connection to WiFi lost, reconnecting...");
+    if (WiFi.status() != WL_CONNECTED)
+    {
+        if (isWifiConnected)
+        {
+            wifiHandlerLogger.warn("Connection to WiFi lost, reconnecting...");
             isWifiConnected = false;
         }
-        LEDManager::setLedStatus(LED_STATUS_WIFI_CONNECTING);
+        statusManager.setStatus(SlimeVR::Status::WIFI_CONNECTING, true);
         reportWifiError();
-        if(wifiConnectionTimeout + 11000 < millis()) {
-            switch(wifiState) {
-                case 0: // Wasn't set up
+        if (wifiConnectionTimeout + 11000 < millis())
+        {
+            switch (wifiState)
+            {
+            case 0: // Wasn't set up
                 return;
-                case 1: // Couldn't connect with first set of credentials
-                    #if defined(WIFI_CREDS_SSID) && defined(WIFI_CREDS_PASSWD)
-                        // Try hardcoded credentials now
-                        WiFi.begin(WIFI_CREDS_SSID, WIFI_CREDS_PASSWD);
+            case 1: // Couldn't connect with first set of credentials
+#if defined(WIFI_CREDS_SSID) && defined(WIFI_CREDS_PASSWD)
+                    // Try hardcoded credentials now
+                setStaticIPIfDefined();
+                WiFi.begin(WIFI_CREDS_SSID, WIFI_CREDS_PASSWD);
+                wifiConnectionTimeout = millis();
+                wifiHandlerLogger.error("Can't connect from saved credentials, status: %d.", WiFi.status());
+                wifiHandlerLogger.debug("Trying hardcoded credentials...");
+#endif
+                wifiState = 2;
+                return;
+            case 2: // Couldn't connect with second set of credentials
+                // Start smart config
+                if (!hadWifi && !WiFi.smartConfigDone() && wifiConnectionTimeout + 11000 < millis())
+                {
+                    if (WiFi.status() != WL_IDLE_STATUS)
+                    {
+                        wifiHandlerLogger.error("Can't connect from any credentials, status: %d.", WiFi.status());
                         wifiConnectionTimeout = millis();
-                        Serial.printf("[NOTICE] WiFi: Can't connect from saved credentials, status: %d.\n", WiFi.status());
-                        Serial.println("[NOTICE] WiFi: Trying hardcoded credentials...");
-                    #endif
-                    wifiState = 2;
-                return;
-                case 2: // Couldn't connect with second set of credentials
-                    // Start smart config
-                    if(!hadWifi && !WiFi.smartConfigDone() && wifiConnectionTimeout + 11000 < millis()) {
-                        if(WiFi.status() != WL_IDLE_STATUS) {
-                            Serial.printf("[NOTICE] WiFi: Can't connect from any credentials, status: %d.\n", WiFi.status());
-                        }
-                        startProvisioning();
                     }
+                    startProvisioning();
+                }
                 return;
             }
         }
         return;
     }
-    if(!isWifiConnected) {
+    if (!isWifiConnected)
+    {
         onConnected();
         return;
-    } else {
-        if(millis() - last_rssi_sample >= 2000) {
+    }
+    else
+    {
+        if (millis() - last_rssi_sample >= 2000)
+        {
             last_rssi_sample = millis();
             uint8_t signalStrength = WiFi.RSSI();
             Network::sendSignalStrength(signalStrength);

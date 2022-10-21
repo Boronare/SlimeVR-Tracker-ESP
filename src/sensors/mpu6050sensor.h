@@ -20,13 +20,17 @@
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
     THE SOFTWARE.
 */
+
+#ifndef SENSORS_MPU6050SENSOR_H
+#define SENSORS_MPU6050SENSOR_H
+
 #include "sensor.h"
 #include <MPU6050.h>
 
 class MPU6050Sensor : public Sensor
 {
 public:
-    MPU6050Sensor(){};
+    MPU6050Sensor(uint8_t id, uint8_t type, uint8_t address, float rotation) : Sensor("MPU6050Sensor", type, id, address, rotation){};
     ~MPU6050Sensor(){};
     void motionSetup() override final;
     void motionLoop() override final;
@@ -35,6 +39,7 @@ public:
 private:
     MPU6050 imu{};
     Quaternion rawQuat{};
+    VectorInt16 rawAccel{};
     // MPU dmp control/status vars
     bool dmpReady = false;    // set true if DMP init was successful
     uint8_t mpuIntStatus;     // holds actual interrupt status byte from MPU
@@ -42,4 +47,10 @@ private:
     uint16_t packetSize;      // expected DMP packet size (default is 42 bytes)
     uint16_t fifoCount;       // count of all bytes currently in FIFO
     uint8_t fifoBuffer[64]{}; // FIFO storage buffer
+
+#ifndef IMU_MPU6050_RUNTIME_CALIBRATION
+    SlimeVR::Configuration::MPU6050CalibrationConfig m_Calibration;
+#endif
 };
+
+#endif

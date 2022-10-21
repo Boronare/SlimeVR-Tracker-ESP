@@ -23,33 +23,37 @@
 #ifndef SLIMEVR_DEBUG_H_
 #define SLIMEVR_DEBUG_H_
 #include "consts.h"
+#include "logging/Level.h"
 
 #define IMU_MPU6050_RUNTIME_CALIBRATION // Comment to revert to startup/traditional-calibration
-#define BNO_USE_ARVR_STABILIZATION // Comment to not use stabilization for BNO085+ IMUs
-#define USE_6_AXIS true // uses 9 (with mag) if false (only for ICM-20948 currently)
+#define BNO_USE_ARVR_STABILIZATION true // Set to false to disable stabilization for BNO085+ IMUs
+#define BNO_USE_MAGNETOMETER_CORRECTION false // Set to true to enable magnetometer correction for BNO08x IMUs. Only works with USE_6_AXIS set to true.
+#define USE_6_AXIS true // uses 9 DoF (with mag) if false (only for ICM-20948 and BNO08x currently)
 #define LOAD_BIAS 1 // Loads the bias values from NVS on start (ESP32 Only)
 #define SAVE_BIAS 1 // Periodically saves bias calibration data to NVS (ESP32 Only)
-#define ENABLE_TAP false // monitor accel for (tripple) tap events and send them. Uses more cpu, disable if problems. Server does nothing with value so disabled atm
+#define BIAS_DEBUG false // Printing BIAS Variables to serial (ICM20948 only)
+#define ENABLE_TAP false // monitor accel for (triple) tap events and send them. Uses more cpu, disable if problems. Server does nothing with value so disabled atm
+#define SEND_ACCELERATION true // send linear acceleration to the server
 
 //Debug information
-//#define FULL_DEBUG
+
+#define LOG_LEVEL LOG_LEVEL_DEBUG
+
+#if LOG_LEVEL == LOG_LEVEL_TRACE
+    #define DEBUG_SENSOR
+    #define DEBUG_NETWORK
+    #define DEBUG_CONFIGURATION
+#endif
+
 #define serialDebug false // Set to true to get Serial output for debugging
 #define serialBaudRate 115200
-#define UPDATE_IMU_UNCONNECTED 1
-//#define SEND_UPDATES_UNCONNECTED 1
-#define LED_INTERVAL_STANDBUY 10000
-#define STATUS_PRINT_INTERVAL 15000
-#define ENABLE_LEDS true
-
-#define LOADING_LED LED_BUILTIN
-#define CALIBRATING_LED LED_BUILTIN
-#define STATUS_LED LED_BUILTIN
+#define LED_INTERVAL_STANDBY 10000
 
 // Determines how often we sample and send data
 #define samplingRateInMillis 100
 
 // Sleeping options
-#define POWERSAVING_MODE POWER_SAVING_MINIMUM
+#define POWERSAVING_MODE POWER_SAVING_LEGACY  // Minimum causes sporadic data pauses
 #if POWERSAVING_MODE >= POWER_SAVING_MINIMUM
     #define TARGET_LOOPTIME_MICROS (samplingRateInMillis * 1000)
 #endif
@@ -70,7 +74,11 @@
 
 #define I2C_SPEED 100000
 
-#define FIRMWARE_BUILD_NUMBER 9
-#define FIRMWARE_VERSION "0.2.0"
+// Send inspection packets over the network to a profiler
+// Not recommended for production
+#define ENABLE_INSPECTION false
+
+#define FIRMWARE_BUILD_NUMBER 12
+#define FIRMWARE_VERSION "0.2.3"
 
 #endif // SLIMEVR_DEBUG_H_

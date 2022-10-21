@@ -1,6 +1,6 @@
 /*
     SlimeVR Code is placed under the MIT license
-    Copyright (c) 2021 Eiren Rain
+    Copyright (c) 2021 Eiren Rain & SlimeVR contributors
 
     Permission is hereby granted, free of charge, to any person obtaining a copy
     of this software and associated documentation files (the "Software"), to deal
@@ -23,9 +23,18 @@
 
 #include "serialcommands.h"
 #include "network/network.h"
+#include "logging/Logger.h"
 #include <CmdCallback.hpp>
+#include "GlobalVars.h"
+#include "batterymonitor.h"
+
+#if ESP32
+    #include "nvs_flash.h"
+#endif
 
 namespace SerialCommands {
+    SlimeVR::Logging::Logger logger("SerialCommands");
+
     CmdCallback<5> cmdCallbacks;
     CmdParser cmdParser;
     CmdBuffer<64> cmdBuffer;
@@ -33,31 +42,72 @@ namespace SerialCommands {
     void cmdSet(CmdParser * parser) {
         if(parser->getParamCount() != 1 && parser->equalCmdParam(1, "WIFI")  ) {
             if(parser->getParamCount() < 3) {
-                Serial.println("[ERR] CMD SET WIFI ERROR: Too few arguments");
-                Serial.println("[NOTICE] Syntax: SET WIFI \"<SSID>\" \"<PASSWORD>\"");
+                logger.error("CMD SET WIFI ERROR: Too few arguments");
+                logger.info("Syntax: SET WIFI \"<SSID>\" \"<PASSWORD>\"");
             } else {
                 WiFiNetwork::setWiFiCredentials(parser->getCmdParam(2), parser->getCmdParam(3));
-                Serial.println("[OK] CMD SET WIFI OK: New wifi credentials set, reconnecting");
+                logger.info("CMD SET WIFI OK: New wifi credentials set, reconnecting");
             }
         } else {
-            Serial.println("[ERR] CMD SET ERROR: Unrecognized variable to set");
+            logger.error("CMD SET ERROR: Unrecognized variable to set");
         }
     }
 
     void cmdGet(CmdParser * parser) {
-        if(parser->getParamCount() != 1 && parser->equalCmdParam(1, "INFO")  ) {
-            Serial.print("[OK] SlimeVR Tracker, ");
-            Serial.print("board: ");
-            Serial.print(BOARD);
-            Serial.print(", hardware: ");
-            Serial.print(HARDWARE_MCU);
-            Serial.print(", build: ");
-            Serial.print(FIRMWARE_BUILD_NUMBER);
-            Serial.print(", firmware: ");
-            Serial.print(FIRMWARE_VERSION);
-            Serial.print(", address: ");
-            Serial.println(WiFiNetwork::getAddress().toString());
+        if (parser->getParamCount() < 2) {
+            return;
+        }
+        
+        if (parser->equalCmdParam(1, "INFO")) {
+            logger.info(
+                "SlimeVR Tracker, board: %d, hardware: %d, build: %d, firmware: %s, address: %s",
+                BOARD,
+                HARDWARE_MCU,
+                FIRMWARE_BUILD_NUMBER,
+                FIRMWARE_VERSION,
+                WiFiNetwork::getAddress().toString().c_str()
+            );
             // TODO Print sensors number and types
+        }
+
+        if (parser->equalCmdParam(1, "CONFIG")) {
+            String str =
+                "BOARD=%d\n" 
+                "IMU=%d\n"
+                "SECOND_IMU=%d\n"
+                "IMU_ROTATION=%f\n"
+                "SECOND_IMU_ROTATION=%f\n"
+                "BATTERY_MONITOR=%d\n"
+                "BATTERY_SHIELD_RESISTANCE=%d\n"
+                "BATTERY_SHIELD_R1=%d\n"
+                "BATTERY_SHIELD_R2=%d\n"
+                "PIN_IMU_SDA=%d\n"
+                "PIN_IMU_SCL=%d\n"
+                "PIN_IMU_INT=%d\n"
+                "PIN_IMU_INT_2=%d\n"
+                "PIN_BATTERY_LEVEL=%d\n"
+                "LED_PIN=%d\n"
+                "LED_INVERTED=%d\n";
+
+            Serial.printf(
+                str.c_str(),
+                BOARD,
+                IMU,
+                SECOND_IMU,
+                IMU_ROTATION,
+                SECOND_IMU_ROTATION,
+                BATTERY_MONITOR,
+                BATTERY_SHIELD_RESISTANCE,
+                BATTERY_SHIELD_R1,
+                BATTERY_SHIELD_R2,
+                PIN_IMU_SDA,
+                PIN_IMU_SCL,
+                PIN_IMU_INT,
+                PIN_IMU_INT_2,
+                PIN_BATTERY_LEVEL,
+                LED_PIN,
+                LED_INVERTED
+            );
         }
     }
 
@@ -66,11 +116,33 @@ namespace SerialCommands {
     }
 
     void cmdReboot(CmdParser * parser) {
+        logger.info("REBOOT");
         ESP.restart();
     }
 
     void cmdFactoryReset(CmdParser * parser) {
-        // TODO Factory reset
+        logger.info("FACTORY RESET");
+
+        configuration.reset();
+
+        WiFi.disconnect(true); // Clear WiFi credentials
+        #if ESP8266
+            ESP.eraseConfig(); // Clear ESP config
+        #elif ESP32
+                nvs_flash_erase();
+        #else
+            #warning SERIAL COMMAND FACTORY RESET NOT SUPPORTED
+            logger.info("FACTORY RESET NOT SUPPORTED");
+            return;
+        #endif
+
+        #if defined(WIFI_CREDS_SSID) && defined(WIFI_CREDS_PASSWD)
+            #warning FACTORY RESET does not clear your hardcoded WiFi credentials!
+            logger.warn("FACTORY RESET does not clear your hardcoded WiFi credentials!");
+        #endif
+
+        delay(3000);
+        ESP.restart();
     }
 
     void setUp() {
@@ -78,7 +150,7 @@ namespace SerialCommands {
         cmdCallbacks.addCmd("GET", &cmdGet);
         cmdCallbacks.addCmd("FRST", &cmdFactoryReset);
         cmdCallbacks.addCmd("REP", &cmdReport);
-        cmdCallbacks.addCmd("REBOOT", &cmdReport);
+        cmdCallbacks.addCmd("REBOOT", &cmdReboot);
     }
 
     void update() {
