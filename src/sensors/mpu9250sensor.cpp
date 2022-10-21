@@ -157,39 +157,8 @@ void MPU9250Sensor::motionLoop()
     if (imu.dmpGetQuaternion(&rawQuat, fifoBuffer))
         return; // FIFO CORRUPTED
     Quat quat(-rawQuat.y, rawQuat.x, rawQuat.z, rawQuat.w);
-<<<<<<< HEAD
-    if (!skipCalcMag)
-    {
-        int16_t mag[3];
-        getMPUScaled();
-        VectorFloat grav;
-        imu.dmpGetGravity(&grav, &rawQuat);
-        float Grav[3] = {grav.x, grav.y, grav.z};
-        if (Mxyz[0] == 0.0f && Mxyz[1] == 0.0f && Mxyz[2] == 0.0f)
-            return;
-        skipCalcMag = SKIP_CALC_MAG_INTERVAL;
-        if (correction.length_squared() == 0.0f)
-        {
-            correction = getCorrection(Grav, Mxyz, quat);
-            if (sensorId)
-                skipCalcMag = SKIP_CALC_MAG_INTERVAL / 2;
-        }
-        else
-        {
-            Quat newCorr = getCorrection(Grav, Mxyz, quat);
-            if (!__isnanf(newCorr.w))
-                correction = correction.slerp(newCorr, MAG_CORR_RATIO);
-        }
-    }
-    else if (skipCalcMag > 0)
-        skipCalcMag--;
-    if (skipCalcMag < 0)
-        quaternion = quat;
-    else
-        quaternion = correction * quat;
-    == == == =
 
-                 getMPUScaled();
+    getMPUScaled();
 
     if (Mxyz[0] == 0.0f && Mxyz[1] == 0.0f && Mxyz[2] == 0.0f)
     {
@@ -235,7 +204,6 @@ void MPU9250Sensor::motionLoop()
 #endif
 
     quaternion = correction * quat;
->>>>>>> 8fc25de52402975e71dc6f2d2e90cc6267b23852
 #else
     unsigned long now = micros();
     unsigned long deltat = now - last; // seconds since last update
@@ -410,13 +378,8 @@ void MPU9250Sensor::startCalibration(int calibrationType)
         calibrationDataMag[i * 3 + 2] = -mz;
         Network::sendRawCalibrationData(calibrationDataAcc, CALIBRATION_TYPE_EXTERNAL_ACCEL, 0);
         Network::sendRawCalibrationData(calibrationDataMag, CALIBRATION_TYPE_EXTERNAL_MAG, 0);
-<<<<<<< HEAD
-        LEDManager::off(CALIBRATING_LED);
+        ledManager.off();
         delay(100);
-        == == == =
-                     ledManager.off();
-        delay(250);
->>>>>>> 8fc25de52402975e71dc6f2d2e90cc6267b23852
     }
     m_Logger.debug("Calculating calibration data...");
 
