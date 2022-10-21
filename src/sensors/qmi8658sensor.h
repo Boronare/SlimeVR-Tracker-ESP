@@ -21,14 +21,14 @@
     THE SOFTWARE.
 */
 #include "sensor.h"
-#include "ledmgr.h"
+#include "logging/Logger.h"
 
 #include <QMI8658.h>
 
 class QMI8658Sensor : public Sensor
 {
 public:
-    QMI8658Sensor(){};
+    QMI8658Sensor(uint8_t id, uint8_t address, float rotation) : Sensor("QMI8658Sensor", IMU_QMI8658, id, address, rotation) {};
     ~QMI8658Sensor(){};
     void motionSetup() override final;
     void motionLoop() override final;
@@ -38,7 +38,7 @@ public:
 
 private:
     QMI8658 imu{};
-    CalibrationConfig *calibration;
+    SlimeVR::Configuration::CalibrationConfig *calibration;
     float Axyz[3]{};
     float Gxyz[3]{};
     float Mxyz[3]{};

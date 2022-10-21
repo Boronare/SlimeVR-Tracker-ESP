@@ -1,5 +1,6 @@
 #include "qmi8658sensor.h"
 #include "mahony.h"
+#include "GlobalVars.h"
 
 constexpr float gscale = (32. / 32768.0) * (PI / 180.0); // gyro default 250 LSB per d/s -> rad/s
 void QMI8658Sensor::motionSetup()
@@ -10,7 +11,7 @@ void QMI8658Sensor::motionSetup()
     {
         Serial.print("[ERR] Can't communicate with QMI8658, response 0x");
         Serial.println(imu.getDeviceID(), HEX);
-        LEDManager::signalAssert();
+        ledManager.blink(30);
         return;
     }
 
