@@ -7,7 +7,7 @@ QMI8658::QMI8658(){};
  * This will activate the device and take it out of sleep mode (which must be done
  * after start-up).
  */
-void QMI8658::initialize(uint8_t addr, uint8_t maddr = 0x00)
+void QMI8658::initialize(uint8_t addr, uint8_t maddr)
 {
     devAddr = addr;
     magAddr = maddr;
