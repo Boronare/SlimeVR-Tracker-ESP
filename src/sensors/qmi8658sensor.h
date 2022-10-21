@@ -25,25 +25,40 @@
 
 #include <QMI8658.h>
 
+#define CaliSamples 64
+#define GyroTolerance 30
+#define MagTolerance 30
+#define MagIgnoreSample 200
+
 class QMI8658Sensor : public Sensor
 {
 public:
-    QMI8658Sensor(uint8_t id, uint8_t address, float rotation) : Sensor("QMI8658Sensor", IMU_QMI8658, id, address, rotation) {};
+    QMI8658Sensor(uint8_t id, uint8_t address, float rotation) : Sensor("QMI8658Sensor", IMU_QMI8658, id, address, rotation){};
     ~QMI8658Sensor(){};
     void motionSetup() override final;
     void motionLoop() override final;
     void getScaledValues(float Gxyz[3], float Axyz[3]);
     float getTemperature();
     void getValueScaled();
+    void AutoCalibrate(int16_t gx, int16_t gy, int16_t gz, int16_t mx, int16_t my, int16_t mz);
 
 private:
     QMI8658 imu{};
-    SlimeVR::Configuration::CalibrationConfig *calibration;
+    SlimeVR::Configuration::QMI8658CalibrationConfig m_Calibration;
     float Axyz[3]{};
     float Gxyz[3]{};
     float Mxyz[3]{};
+    float Gbias[3]{};
+    int16_t *Cx{};
+    int16_t *Cy{};
+    int16_t *Cz{};
+    uint8_t Gr = CaliSamples, Mr = CaliSamples - 1, Gf = 0, Mf = 0;
+    float MagStr = 0;
     float q[4]{1.0f, 0.0f, 0.0f, 0.0f};
     // Loop timing globals
     uint32_t now = 0, last = 0; // micros() timers
     float deltat = 0;           // loop time in seconds
+
+    SlimeVR::Configuration::QMI8658CalibrationConfig getMagCalibration();
+    bool verifyMagCali(SlimeVR::Configuration::QMI8658CalibrationConfig cali);
 };

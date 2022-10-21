@@ -7,17 +7,18 @@ QMI8658::QMI8658(){};
  * This will activate the device and take it out of sleep mode (which must be done
  * after start-up).
  */
-void QMI8658::initialize(uint8_t addr)
+void QMI8658::initialize(uint8_t addr, uint8_t maddr = 0x00)
 {
     devAddr = addr;
+    magAddr = maddr;
     /* Issue a soft-reset to bring the device into a clean state */
     I2Cdev::writeByte(devAddr, QMI8658_RA_RESET, 0xB0);
 
-        // mag -> setMode(0);
-    I2Cdev::writeByte(0x2C + (0x6B - devAddr), 0x0B, 0x01);
+    // mag -> setMode(0);
+    I2Cdev::writeByte(magAddr, 0x0B, 0x01);
 
     // mag -> setMode(0x0F);
-    I2Cdev::writeByte(0x2C + (0x6B - devAddr), 0x09, 0x00 | 0x01 | 0x00 | 0x01);
+    I2Cdev::writeByte(magAddr, 0x09, 0x00 | 0x01 | 0x00 | 0x01);
 
     delay(500);
     I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL1, 0b01100000);
@@ -55,7 +56,7 @@ void QMI8658::getMotion9(int16_t *ax, int16_t *ay, int16_t *az, int16_t *gx, int
 
 void QMI8658::getMagneto(int16_t *mx, int16_t *my, int16_t *mz)
 {
-    I2Cdev::readBytes(0x2C + (0x6B - devAddr), 0x00, 6, buffer);
+    I2Cdev::readBytes(magAddr, 0x00, 6, buffer);
     *mx = (((int16_t)buffer[1]) << 8) | buffer[0];
     *my = (((int16_t)buffer[3]) << 8) | buffer[2];
     *mz = (((int16_t)buffer[5]) << 8) | buffer[4];
