@@ -29,7 +29,7 @@
 #define IMU IMU_QMI8658
 #define SECOND_IMU IMU
 // #define BOARD BOARD_CUSTOM
-#define BOARD BOARD_SLIMEVR
+#define BOARD BOARD_SLIMEVR_LEGACY
 #define IMU_ROTATION DEG_90
 #define SECOND_IMU_ROTATION DEG_270
 
@@ -44,7 +44,7 @@
 // For other boards you can now adjust the other resistor values.
 // The diagram looks like this:
 //   (Battery)--- [BATTERY_SHIELD_RESISTANCE] ---(INPUT_BOARD)---  [BATTERY_SHIELD_R2] ---(ESP32_INPUT)--- [BATTERY_SHIELD_R1] --- (GND)
-#define BATTERY_SHIELD_RESISTANCE 420 // 130k BatteryShield, 180k SlimeVR or fill in external resistor value in kOhm
+#define BATTERY_SHIELD_RESISTANCE 100 // 130k BatteryShield, 180k SlimeVR or fill in external resistor value in kOhm
 // #define BATTERY_SHIELD_R1 100 // Board voltage divider resistor Ain to GND in kOhm
 // #define BATTERY_SHIELD_R2 220 // Board voltage divider resistor Ain to INPUT_BOARD in kOhm
 

@@ -37,7 +37,7 @@
 
 // Debug information
 
-#define LOG_LEVEL LOG_LEVEL_DEBUG
+#define LOG_LEVEL LOG_LEVEL_FATAL
 
 #if LOG_LEVEL == LOG_LEVEL_TRACE
 #define DEBUG_SENSOR
@@ -50,7 +50,7 @@
 #define LED_INTERVAL_STANDBY 10000
 
 // Determines how often we sample and send data
-#define samplingRateInMillis 100
+#define samplingRateInMillis 20
 
 // Sleeping options
 #define POWERSAVING_MODE POWER_SAVING_LEGACY // Minimum causes sporadic data pauses
