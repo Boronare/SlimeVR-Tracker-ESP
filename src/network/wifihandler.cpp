@@ -219,8 +219,6 @@ void WiFiNetwork::upkeep()
                         #endif
                         startProvisioning();
                     }
-                    startProvisioning();
-                }
                 return;
             }
         }
