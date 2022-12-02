@@ -134,12 +134,12 @@ void BMI160Sensor::motionLoop() {
 
     mahonyQuaternionUpdate(q, Axyz[0], Axyz[1], Axyz[2], Gxyz[0], Gxyz[1], Gxyz[2], deltat * 1.0e-6f);
     quaternion.set(-q[2], q[1], q[3], q[0]);
-    quaternion *= sensorOffset;
 
 #if SEND_ACCELERATION
     {
-        this->acceleration[0] = Axyz[0];
-        this->acceleration[1] = Axyz[1];
+        // Use the same mapping as in quaternion.set(-q[2], q[1], q[3], q[0]);
+        this->acceleration[0] = -Axyz[1];
+        this->acceleration[1] = Axyz[0];
         this->acceleration[2] = Axyz[2];
 
         // get the component of the acceleration that is gravity
@@ -159,6 +159,8 @@ void BMI160Sensor::motionLoop() {
         this->acceleration[2] *= ASCALE_4G;
     }
 #endif
+
+    quaternion *= sensorOffset;
 
 #if ENABLE_INSPECTION
     {
@@ -271,17 +273,16 @@ void BMI160Sensor::startCalibration(int calibrationType) {
     delay(1500);
     m_Logger.debug("Gathering accelerometer data...");
 
+    MagnetoCalibration *magneto = new MagnetoCalibration();
+
     uint16_t accelCalibrationSamples = 300;
-    float *calibrationDataAcc = (float*)malloc(accelCalibrationSamples * 3 * sizeof(float));
     for (int i = 0; i < accelCalibrationSamples; i++)
     {
         ledManager.on();
 
         int16_t ax, ay, az;
         imu.getAcceleration(&ax, &ay, &az);
-        calibrationDataAcc[i * 3 + 0] = ax;
-        calibrationDataAcc[i * 3 + 1] = ay;
-        calibrationDataAcc[i * 3 + 2] = az;
+        magneto->sample(ax, ay, az);
 
         ledManager.off();
         delay(100);
@@ -290,8 +291,9 @@ void BMI160Sensor::startCalibration(int calibrationType) {
     m_Logger.debug("Calculating calibration data...");
 
     float A_BAinv[4][3];
-    CalculateCalibration(calibrationDataAcc, accelCalibrationSamples, A_BAinv);
-    free(calibrationDataAcc);
+    magneto->current_calibration(A_BAinv);
+    delete magneto;
+
     m_Logger.debug("Finished Calculate Calibration data");
     m_Logger.debug("Accelerometer calibration matrix:");
     m_Logger.debug("{");
