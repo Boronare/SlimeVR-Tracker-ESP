@@ -50,10 +50,10 @@
 #define LED_INTERVAL_STANDBY 10000
 
 // Determines how often we sample and send data
-#define samplingRateInMillis 20
+#define samplingRateInMillis 5
 
 // Sleeping options
-#define POWERSAVING_MODE POWER_SAVING_LEGACY // Minimum causes sporadic data pauses
+#define POWERSAVING_MODE POWER_SAVING_MODERATE // Minimum causes sporadic data pauses
 #if POWERSAVING_MODE >= POWER_SAVING_MINIMUM
 #define TARGET_LOOPTIME_MICROS (samplingRateInMillis * 1000)
 #endif

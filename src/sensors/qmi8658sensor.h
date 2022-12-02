@@ -27,7 +27,7 @@
 
 #define CaliSamples 64
 #define GyroTolerance 30
-#define MagTolerance 500
+#define MagTolerance 300
 #define MagIgnoreSample 1000
 
 class QMI8658Sensor : public Sensor

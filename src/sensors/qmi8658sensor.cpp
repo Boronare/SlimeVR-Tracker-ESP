@@ -92,7 +92,8 @@ void QMI8658Sensor::motionLoop()
     // if (Gf == Gr && abs(MagStr - (sq(Mxyz[0]) + sq(Mxyz[1]) + sq(Mxyz[2]))) > sq(MagTolerance)) // 6DoF mahony if Magneto unstable
     //     mahonyQuaternionUpdate(q, Axyz[0], Axyz[1], Axyz[2], Gxyz[0], Gxyz[1], Gxyz[2], deltat * 1.0e-6);
     // else
-        mahonyQuaternionUpdate(q, Axyz[0], Axyz[1], Axyz[2], Gxyz[0], Gxyz[1], Gxyz[2], Mxyz[0], Mxyz[1], Mxyz[2], deltat * 1.0e-6);
+    // mahonyQuaternionUpdate(q,0, 0, 0, Gxyz[0], Gxyz[1], -Gxyz[2], deltat * 1.0e-6);
+    mahonyQuaternionUpdate(q, Axyz[0], Axyz[1], Axyz[2], Gxyz[0], Gxyz[1], Gxyz[2], Mxyz[0], Mxyz[1], Mxyz[2], deltat * 1.0e-6);
     quaternion = Quat(q[1],q[2],q[3],q[0]);
     quaternion *= sensorOffset;
     if (!lastQuatSent.equalsWithEpsilon(quaternion))
@@ -158,6 +159,7 @@ void QMI8658Sensor::AutoCalibrate(int16_t gx, int16_t gy, int16_t gz, int16_t mx
     }
     else if (Mf != Mr)
     {
+        ledManager.on();
         if (abs(Cx[Mf] - mx) > MagIgnoreSample || abs(Cy[Mf] - my) > MagIgnoreSample || abs(Cz[Mf] - mz) > MagIgnoreSample)
         {
             Mf++;
@@ -170,6 +172,7 @@ void QMI8658Sensor::AutoCalibrate(int16_t gx, int16_t gy, int16_t gz, int16_t mx
             {
                 if (verifyMagCali(m_Calibration))
                 {
+                    ledManager.off();
                     m_Logger.info("Mag strength valid.\n");
                     delete[] Cx;
                     delete[] Cy;
@@ -196,6 +199,7 @@ void QMI8658Sensor::AutoCalibrate(int16_t gx, int16_t gy, int16_t gz, int16_t mx
                     calibration.data.qmi8658 = m_Calibration;
                     configuration.setCalibration(sensorId, calibration);
                     configuration.save();
+                    ledManager.off();
                     return;
                 }
                 Mr += CaliSamples / 4;
@@ -257,17 +261,18 @@ bool QMI8658Sensor::verifyMagCali(SlimeVR::Configuration::QMI8658CalibrationConf
         magstr[i] = sqrt(sq(x) + sq(y) + sq(z));
         avgstr += magstr[i] / CaliSamples;
     }
+    float toler = avgstr*0.05;
 
     m_Logger.debug("Average Mag strength with given calibration : %.1f\nMag Strengths:", avgstr);
     for (uint8_t i = 0; i < CaliSamples; i++)
     {
         m_Logger.debug(" %.1f ", magstr[i]);
-        if (abs(avgstr - magstr[i]) > MagTolerance)
+        if (abs(avgstr - magstr[i]) > toler)
             invalidCnt++;
     }
     delete[] magstr;
     m_Logger.debug("\n");
-    if (invalidCnt < CaliSamples / 8)
+    if (invalidCnt < CaliSamples / 16)
     {
         MagStr = avgstr;
         return true;

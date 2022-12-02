@@ -90,7 +90,7 @@ void setup()
     Wire.setClock(I2C_SPEED);
 
     // Wait for IMU to boot
-    delay(500);
+    delay(2000);
     
     sensorManager.setup();
     

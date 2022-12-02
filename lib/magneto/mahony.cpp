@@ -26,7 +26,7 @@
 // These are the free parameters in the Mahony filter and fusion scheme,
 // Kp for proportional feedback, Ki for integral
 // with MPU-9250, angles start oscillating at Kp=40. Ki does not seem to help and is not required.
-#define Kp 10.0f
+#define Kp 1.0f
 #define Ki 0.0f
 
 static float ix = 0.0f, iy = 0.0f, iz = 0.0f;  //integral feedback terms
