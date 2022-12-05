@@ -24,12 +24,12 @@
 #include "SensorManager.h"
 #include <i2cscan.h>
 #include "network/network.h"
-#include "bno055sensor.h"
-#include "bno080sensor.h"
-#include "mpu9250sensor.h"
-#include "mpu6050sensor.h"
-#include "bmi160sensor.h"
-#include "icm20948sensor.h"
+// #include "bno055sensor.h"
+// #include "bno080sensor.h"
+// #include "mpu9250sensor.h"
+// #include "mpu6050sensor.h"
+// #include "bmi160sensor.h"
+// #include "icm20948sensor.h"
 #include "qmi8658sensor.h"
 #include "ErroneousSensor.h"
 

@@ -30,8 +30,8 @@
 #define SECOND_IMU IMU
 // #define BOARD BOARD_CUSTOM
 #define BOARD BOARD_SLIMEVR_LEGACY
-#define IMU_ROTATION DEG_90
-#define SECOND_IMU_ROTATION DEG_270
+#define IMU_ROTATION DEG_270
+#define SECOND_IMU_ROTATION DEG_90
 
 // Battery monitoring options (comment to disable):
 //   BAT_EXTERNAL for ADC pin,

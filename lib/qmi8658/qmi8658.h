@@ -475,7 +475,7 @@ public:
     uint8_t getStatus1();
 
 private:
-    uint8_t buffer[20];
+    uint8_t buffer[12];
     uint8_t devAddr;
     uint8_t magAddr;
 };

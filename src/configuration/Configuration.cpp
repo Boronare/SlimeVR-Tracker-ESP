@@ -116,6 +116,22 @@ namespace SlimeVR {
 
             m_Logger.debug("Saved configuration");
         }
+        void Configuration::save(int i) {
+            Serial.print("Declare config\n");
+            CalibrationConfig config = m_Calibrations[i];
+
+            Serial.print("Declare path\n");
+            char path[17];
+            sprintf(path, "/calibrations/%d", i);
+            Serial.printf("sprintf path : %s\n",path);
+            Serial.print("Opening file\n");
+            File file = LittleFS.open(path, "w");
+            Serial.print("Writing file\n");
+            file.write((uint8_t*)&config, sizeof(CalibrationConfig));
+            Serial.print("Closing file\n");
+            file.close();
+            Serial.print("File Closed\n");
+        }
 
         void Configuration::reset() {
             LittleFS.format();

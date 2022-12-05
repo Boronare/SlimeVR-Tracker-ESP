@@ -3,7 +3,7 @@
 #include "GlobalVars.h"
 #include "magneto1.4.h"
 
-constexpr float gscale = (2048. / 32768.0) * (PI / 180.0); // gyro default 2048 LSB per d/s -> rad/s
+constexpr float gscale = (512. / 32768.0) * (PI / 180.0); // gyro default 2048 LSB per d/s -> rad/s
 void QMI8658Sensor::motionSetup()
 {
     // initialize device
@@ -22,8 +22,9 @@ void QMI8658Sensor::motionSetup()
     Cx = new int16_t[CaliSamples];
     Cy = new int16_t[CaliSamples];
     Cz = new int16_t[CaliSamples];
+    ignoreList = new int8_t[CaliSamples];
     for(uint8_t i=0;i<CaliSamples;i++){
-        Cx[i]=Cy[i]=Cz[i]=0;
+        Cx[i]=Cy[i]=Cz[i]=ignoreList[i]=0;
     }
 
     SlimeVR::Configuration::CalibrationConfig sensorCalibration = configuration.getCalibration(sensorId);
@@ -32,6 +33,7 @@ void QMI8658Sensor::motionSetup()
     {
     case SlimeVR::Configuration::CalibrationConfigType::QMI8658:
         m_Calibration = sensorCalibration.data.qmi8658;
+        Serial.printf("Loaded Cali : G: %f,%f,%f / M: %f,%f,%f\n",m_Calibration.G_off[0],m_Calibration.G_off[1],m_Calibration.G_off[2],m_Calibration.M_B[0],m_Calibration.M_B[1],m_Calibration.M_B[2]);
         break;
     default:
         m_Logger.warn("Incompatible calibration data found for sensor %d, ignoring...", sensorId);
@@ -43,6 +45,13 @@ void QMI8658Sensor::motionSetup()
             m_Calibration.M_B[i]=m_Calibration.G_off[i]=0;
         }
     }
+    delay(1000);
+    getValueScaled();
+    if(Axyz[2]<-2000){
+        Mf = Mr = -1;
+        Serial.print("6DoF Mode enabled");
+    }
+        
     working = true;
 }
 void QMI8658Sensor::getValueScaled()
@@ -86,13 +95,10 @@ void QMI8658Sensor::motionLoop()
     unsigned long deltat = now - last; // seconds since last update
     last = now;
     getValueScaled();
-
-    m_Logger.debug("A : %+6.0f %+6.0f %+6.0f / G : %+f %+f %+f / M: %+6.0f %+6.0f %+6.0f / Q : %+f %+f %+f %+f\n", Axyz[0], Axyz[1], Axyz[2], Gxyz[0], Gxyz[1], Gxyz[2], Mxyz[0], Mxyz[1], Mxyz[2], q[0], q[1], q[2], q[3]);
-
-    // if (Gf == Gr && abs(MagStr - (sq(Mxyz[0]) + sq(Mxyz[1]) + sq(Mxyz[2]))) > sq(MagTolerance)) // 6DoF mahony if Magneto unstable
-    //     mahonyQuaternionUpdate(q, Axyz[0], Axyz[1], Axyz[2], Gxyz[0], Gxyz[1], Gxyz[2], deltat * 1.0e-6);
-    // else
-    // mahonyQuaternionUpdate(q,0, 0, 0, Gxyz[0], Gxyz[1], -Gxyz[2], deltat * 1.0e-6);
+    // m_Logger.debug("A : %+6.0f %+6.0f %+6.0f / G : %+f %+f %+f / M: %+6.0f %+6.0f %+6.0f / Q : %+f %+f %+f %+f", Axyz[0], Axyz[1], Axyz[2], Gxyz[0], Gxyz[1], Gxyz[2], Mxyz[0], Mxyz[1], Mxyz[2], q[0], q[1], q[2], q[3]);
+    if (Mr==-1) // 6DoF mahony if Magneto unstable
+        mahonyQuaternionUpdate(q, Axyz[0], Axyz[1], Axyz[2], Gxyz[0], Gxyz[1], Gxyz[2], deltat * 1.0e-6);
+    else
     mahonyQuaternionUpdate(q, Axyz[0], Axyz[1], Axyz[2], Gxyz[0], Gxyz[1], Gxyz[2], Mxyz[0], Mxyz[1], Mxyz[2], deltat * 1.0e-6);
     quaternion = Quat(q[1],q[2],q[3],q[0]);
     quaternion *= sensorOffset;
@@ -107,63 +113,82 @@ float QMI8658Sensor::getTemperature()
 {
     return imu.getTemperature() * 1.0;
 }
-
-void QMI8658Sensor::AutoCalibrate(int16_t gx, int16_t gy, int16_t gz, int16_t mx, int16_t my, int16_t mz)
+void QMI8658Sensor::AutoCalibrate(int16_t gx, int16_t gy, int16_t gz, int16_t mx, int16_t my, int16_t mz){
+    if (Gf != Gr) AutoCalibrateGyro(gx,gy,gz);
+    else if (Mf != Mr) AutoCalibrateMag(mx,my,mz);
+    else{
+        Gr += CaliSamples / 4;
+        if (Gr > CaliSamples || Gf >= CaliSamples)
+        {
+            Gf -= CaliSamples;
+            Gr -= CaliSamples;
+        }
+    }
+}
+void QMI8658Sensor::AutoCalibrateGyro(int16_t gx, int16_t gy, int16_t gz)
 {
-    if (Gf != Gr)
-    {
-        Gbias[0] += (gx - Cx[Gf]) * 1.0f / CaliSamples;
         Cx[Gf] = gx;
-        Gbias[1] += (gy - Cy[Gf]) * 1.0f / CaliSamples;
         Cy[Gf] = gy;
-        Gbias[2] += (gz - Cz[Gf]) * 1.0f / CaliSamples;
         Cz[Gf] = gz;
         Gf++;
         if (Gf == Gr)
         {
-            m_Logger.debug("Gyro Samples Collected : X: %f Y:%f Z:%f",Gbias[0],Gbias[1],Gbias[2]);
+            // m_Logger.debug("Gyro Samples Collected : X: %f Y:%f Z:%f",Gbias[0],Gbias[1],Gbias[2]);
             float vx = 0.0;
             float vy = 0.0;
             float vz = 0.0;
+            float ax = 0.0;
+            float ay = 0.0;
+            float az = 0.0;
             for (uint8_t i = 0; i < CaliSamples; i++)
             {
-                vx += sq(Cx[i] - Gbias[0]);
-                vy += sq(Cy[i] - Gbias[1]);
-                vz += sq(Cz[i] - Gbias[2]);
+                vx += sq(Cx[i] - m_Calibration.G_off[0]);
+                vy += sq(Cy[i] - m_Calibration.G_off[1]);
+                vz += sq(Cz[i] - m_Calibration.G_off[2]);
+                ax += Cx[i] - m_Calibration.G_off[0];
+                ay += Cy[i] - m_Calibration.G_off[1];
+                az += Cz[i] - m_Calibration.G_off[2];
             }
-            if (vx > sq(GyroTolerance) * (CaliSamples - 1) || vy > sq(GyroTolerance) * (CaliSamples - 1) || vz > sq(GyroTolerance) * (CaliSamples - 1))
-            { // Gyro Value is unstable.
-                Gr += CaliSamples / 4;
-                if (Gr > CaliSamples)
-                {
-                    Gf -= CaliSamples;
-                    Gr -= CaliSamples;
-                }
-                m_Logger.info("Gyro Calibration Failed : %f/%f/%f",vx/(CaliSamples-1),vy/(CaliSamples-1),vz/(CaliSamples-1));
+            if (abs(ax) < (0.002 * CaliSamples/gscale) && abs(ay) <  0.002 * CaliSamples/gscale && abs(az) < 0.002 * CaliSamples/gscale
+                && vx < sq(GyroTolerance) * (CaliSamples - 1) && vy < sq(GyroTolerance) * (CaliSamples - 1) && vz < sq(GyroTolerance) * (CaliSamples - 1))
+                return;
+            // m_Logger.debug("Gyro Calibration Failed : %f/%f/%f/%f/%f/%f",ax,ay,az,vx,vy,vz);
+            vx = 0.0;
+            vy = 0.0;
+            vz = 0.0;
+            for (uint8_t i = 0; i < CaliSamples; i++)
+            {
+                vx += sq(Cx[i] - m_Calibration.G_off[0] - ax/CaliSamples);
+                vy += sq(Cy[i] - m_Calibration.G_off[1] - ay/CaliSamples);
+                vz += sq(Cz[i] - m_Calibration.G_off[2] - az/CaliSamples);
             }
-            else
-            { // Gyro Value Stable. Complete Calibrating Gyro and get ready for calibrate Magneto.
-                m_Logger.info("Gyro Calibration Done.");
-                m_Calibration.G_off[0] = Gbias[0];
-                m_Calibration.G_off[1] = Gbias[1];
-                m_Calibration.G_off[2] = Gbias[2];
-                Cx[0] = mx;
-                Cy[0] = my;
-                Cz[0] = mz;
-                for (uint8_t i = 1; i < CaliSamples; i++)
-                {
-                    Cx[i] = Cy[i] = Cz[i] = 0;
-                }
+            //Update bias if Gyro for each axis is stable.
+            if(vx < sq(GyroTolerance) * (CaliSamples - 1)){
+                m_Calibration.G_off[0] += ax/CaliSamples;
+            }
+            if(vy < sq(GyroTolerance) * (CaliSamples - 1)){
+                m_Calibration.G_off[1] += ay/CaliSamples;
+            }
+            if(vz < sq(GyroTolerance) * (CaliSamples - 1)){
+                m_Calibration.G_off[2] += az/CaliSamples;
+            }
+            // Prepare for next gyro calibration.
+            Gr += CaliSamples / 4;
+            if (Gr > CaliSamples)
+            {
+                Gf -= CaliSamples;
+                Gr -= CaliSamples;
             }
         }
-    }
-    else if (Mf != Mr)
-    {
+}
+
+void QMI8658Sensor::AutoCalibrateMag(int16_t mx, int16_t my, int16_t mz){
         ledManager.on();
         if (abs(Cx[Mf] - mx) > MagIgnoreSample || abs(Cy[Mf] - my) > MagIgnoreSample || abs(Cz[Mf] - mz) > MagIgnoreSample)
         {
+            if(Mf==0 && Mr == CaliSamples-1) Serial.print("Starting Magneto Calibration");
             Mf++;
-            if (Mf > 63)
+            if (Mf >= CaliSamples)
                 Mf = 0;
             Cx[Mf] = mx;
             Cy[Mf] = my;
@@ -172,17 +197,20 @@ void QMI8658Sensor::AutoCalibrate(int16_t gx, int16_t gy, int16_t gz, int16_t mx
             {
                 if (verifyMagCali(m_Calibration))
                 {
+                    Serial.print("Mag strength valid.\n");
+                    // delete[] Cx;
+                    // delete[] Cy;
+                    // delete[] Cz;
+                    // delete[] ignoreList;
                     ledManager.off();
-                    m_Logger.info("Mag strength valid.\n");
-                    delete[] Cx;
-                    delete[] Cy;
-                    delete[] Cz;
                     return;
                 }
-                SlimeVR::Configuration::QMI8658CalibrationConfig n_Calibration = getMagCalibration();
+                else{
+                    SlimeVR::Configuration::QMI8658CalibrationConfig n_Calibration = getMagCalibration();
                 if (verifyMagCali(n_Calibration))
                 {
-                    m_Logger.info("New calibration valid\n");
+                    Serial.print("New calibration valid\n");
+                    n_Calibration = getMagCalibration();
                     for (uint8_t i = 0; i < 3; i++)
                     {
                         for (uint8_t j = 0; j < 3; j++)
@@ -191,49 +219,55 @@ void QMI8658Sensor::AutoCalibrate(int16_t gx, int16_t gy, int16_t gz, int16_t mx
                         }
                         m_Calibration.M_B[i] = n_Calibration.M_B[i];
                     }
-                    delete[] Cx;
-                    delete[] Cy;
-                    delete[] Cz;
+                    // delete[] Cx;
+                    // delete[] Cy;
+                    // delete[] Cz;
+                    // delete[] ignoreList;
                     SlimeVR::Configuration::CalibrationConfig calibration;
                     calibration.type = SlimeVR::Configuration::CalibrationConfigType::QMI8658;
                     calibration.data.qmi8658 = m_Calibration;
                     configuration.setCalibration(sensorId, calibration);
-                    configuration.save();
+                    configuration.save(sensorId);
                     ledManager.off();
                     return;
                 }
+                ledManager.off();
+                delay(100);
+                ledManager.on();
+                delay(100);
+                ledManager.off();
+                delay(100);
                 Mr += CaliSamples / 4;
                 if (Mr >= CaliSamples)
                     Mr -= CaliSamples;
+                }
             }
         }
-    }
 }
 
 SlimeVR::Configuration::QMI8658CalibrationConfig QMI8658Sensor::getMagCalibration()
 {
     SlimeVR::Configuration::QMI8658CalibrationConfig retVal;
-    float *calibrationDataMag = new float[CaliSamples * 3];
+    MagnetoCalibration *magneto = new MagnetoCalibration;
     for (uint8_t i = 0; i < CaliSamples; i++)
     {
-        calibrationDataMag[i * 3 + 0] = Cx[i];
-        calibrationDataMag[i * 3 + 1] = Cy[i];
-        calibrationDataMag[i * 3 + 2] = Cz[i];
+        if(!ignoreList[i])
+            magneto->sample(Cx[i],Cy[i],Cz[i]);
     }
     float M_BAinv[4][3];
-    CalculateCalibration(calibrationDataMag, CaliSamples, M_BAinv);
-    delete[] calibrationDataMag;
-    m_Logger.debug("[INFO] Magnetometer calibration matrix:");
-    m_Logger.debug("{");
+    magneto->current_calibration(M_BAinv);
+    delete magneto;
+    // m_Logger.debug("[INFO] Magnetometer calibration matrix:");
+    // m_Logger.debug("{");
     for (int i = 0; i < 3; i++)
     {
         retVal.M_B[i] = M_BAinv[0][i];
         retVal.M_Ainv[0][i] = M_BAinv[1][i];
         retVal.M_Ainv[1][i] = M_BAinv[2][i];
         retVal.M_Ainv[2][i] = M_BAinv[3][i];
-        m_Logger.debug("  %f, %f, %f, %f", M_BAinv[0][i], M_BAinv[1][i], M_BAinv[2][i], M_BAinv[3][i]);
+        // m_Logger.debug("  %f, %f, %f, %f", M_BAinv[0][i], M_BAinv[1][i], M_BAinv[2][i], M_BAinv[3][i]);
     }
-    m_Logger.debug("}");
+    // m_Logger.debug("}");
     return retVal;
 }
 bool QMI8658Sensor::verifyMagCali(SlimeVR::Configuration::QMI8658CalibrationConfig cali)
@@ -261,22 +295,28 @@ bool QMI8658Sensor::verifyMagCali(SlimeVR::Configuration::QMI8658CalibrationConf
         magstr[i] = sqrt(sq(x) + sq(y) + sq(z));
         avgstr += magstr[i] / CaliSamples;
     }
-    float toler = avgstr*0.05;
+    if(isnan(avgstr)) return false;
+    float toler = avgstr*0.1;
 
     m_Logger.debug("Average Mag strength with given calibration : %.1f\nMag Strengths:", avgstr);
     for (uint8_t i = 0; i < CaliSamples; i++)
     {
         m_Logger.debug(" %.1f ", magstr[i]);
-        if (abs(avgstr - magstr[i]) > toler)
+        if (!(abs(avgstr - magstr[i]) < toler)){
             invalidCnt++;
+            ignoreList[i]=1;
+        }
+        else ignoreList[i]=0;
     }
     delete[] magstr;
-    m_Logger.debug("\n");
-    if (invalidCnt < CaliSamples / 16)
+    if (invalidCnt < CaliSamples / 4)
     {
         MagStr = avgstr;
         return true;
     }
-    else
+    else{
+        for(uint8_t i=0; i< CaliSamples; i++)
+            ignoreList[i]=0;
         return false;
+    }
 }

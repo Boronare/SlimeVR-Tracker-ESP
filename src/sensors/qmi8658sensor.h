@@ -25,7 +25,7 @@
 
 #include <QMI8658.h>
 
-#define CaliSamples 64
+#define CaliSamples 48
 #define GyroTolerance 30
 #define MagTolerance 300
 #define MagIgnoreSample 1000
@@ -41,6 +41,8 @@ public:
     float getTemperature();
     void getValueScaled();
     void AutoCalibrate(int16_t gx, int16_t gy, int16_t gz, int16_t mx, int16_t my, int16_t mz);
+    void AutoCalibrateGyro(int16_t gx, int16_t gy, int16_t gz);
+    void AutoCalibrateMag(int16_t mx, int16_t my, int16_t mz);
 
 private:
     QMI8658 imu{};
@@ -48,11 +50,11 @@ private:
     float Axyz[3]{};
     float Gxyz[3]{};
     float Mxyz[3]{};
-    float Gbias[3]{};
     int16_t *Cx{};
     int16_t *Cy{};
     int16_t *Cz{};
-    uint8_t Gr = CaliSamples, Mr = CaliSamples - 1, Gf = 0, Mf = 0;
+    int8_t *ignoreList{};
+    int8_t Gr = CaliSamples , Mr = CaliSamples - 1, Gf = 0, Mf = 0;
     float MagStr = 0;
     float q[4]{1.0f, 0.0f, 0.0f, 0.0f};
     // Loop timing globals
