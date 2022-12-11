@@ -4,6 +4,10 @@
 #include "magneto1.4.h"
 
 constexpr float gscale = (512. / 32768.0) * (PI / 180.0); // gyro default 2048 LSB per d/s -> rad/s
+
+
+
+
 void QMI8658Sensor::motionSetup()
 {
     // initialize device
@@ -18,14 +22,6 @@ void QMI8658Sensor::motionSetup()
 
     Serial.print("[OK] Connected to QMI8658, ID 0x");
     Serial.println(imu.getDeviceID(), HEX);
-
-    Cx = new int16_t[CaliSamples];
-    Cy = new int16_t[CaliSamples];
-    Cz = new int16_t[CaliSamples];
-    ignoreList = new int8_t[CaliSamples];
-    for(uint8_t i=0;i<CaliSamples;i++){
-        Cx[i]=Cy[i]=Cz[i]=ignoreList[i]=0;
-    }
 
     SlimeVR::Configuration::CalibrationConfig sensorCalibration = configuration.getCalibration(sensorId);
     // If no compatible calibration data is found, the calibration data will just be zero-ed out
@@ -46,11 +42,6 @@ void QMI8658Sensor::motionSetup()
         }
     }
     delay(1000);
-    getValueScaled();
-    if(Axyz[2]<-2000){
-        Mf = Mr = -1;
-        Serial.print("6DoF Mode enabled");
-    }
         
     working = true;
 }
@@ -92,14 +83,12 @@ void QMI8658Sensor::getValueScaled()
 void QMI8658Sensor::motionLoop()
 {
     unsigned long now = micros();
-    unsigned long deltat = now - last; // seconds since last update
+    // unsigned long deltat = now - last; // seconds since last update
     last = now;
     getValueScaled();
-    // m_Logger.debug("A : %+6.0f %+6.0f %+6.0f / G : %+f %+f %+f / M: %+6.0f %+6.0f %+6.0f / Q : %+f %+f %+f %+f", Axyz[0], Axyz[1], Axyz[2], Gxyz[0], Gxyz[1], Gxyz[2], Mxyz[0], Mxyz[1], Mxyz[2], q[0], q[1], q[2], q[3]);
-    if (Mr==-1) // 6DoF mahony if Magneto unstable
-        mahonyQuaternionUpdate(q, Axyz[0], Axyz[1], Axyz[2], Gxyz[0], Gxyz[1], Gxyz[2], deltat * 1.0e-6);
-    else
+    // m_Logger.debug("A : %+6.0f %+6.0f %+6.0f / G : %+f %+f %+f / M: %+6.0f %+6.0f %+6.0f / Q : %+f %+f %+f %+f", Axyz[0], Axyz[1], Axyz[2], Gxyz[0], Gxyz[1], Gxyz[2], Mxyz[0];yz[0], Mxyz[0];yz[1], Mxyz[0];yz[2], q[0], q[1], q[2], q[3]);
     mahonyQuaternionUpdate(q, Axyz[0], Axyz[1], Axyz[2], Gxyz[0], Gxyz[1], Gxyz[2], Mxyz[0], Mxyz[1], Mxyz[2], deltat * 1.0e-6);
+    
     quaternion = Quat(q[1],q[2],q[3],q[0]);
     quaternion *= sensorOffset;
     if (!lastQuatSent.equalsWithEpsilon(quaternion))
@@ -186,6 +175,7 @@ void QMI8658Sensor::AutoCalibrateMag(int16_t mx, int16_t my, int16_t mz){
         ledManager.on();
         if (abs(Cx[Mf] - mx) > MagIgnoreSample || abs(Cy[Mf] - my) > MagIgnoreSample || abs(Cz[Mf] - mz) > MagIgnoreSample)
         {
+            ledManager.off();
             if(Mf==0 && Mr == CaliSamples-1) Serial.print("Starting Magneto Calibration");
             Mf++;
             if (Mf >= CaliSamples)
@@ -198,11 +188,7 @@ void QMI8658Sensor::AutoCalibrateMag(int16_t mx, int16_t my, int16_t mz){
                 if (verifyMagCali(m_Calibration))
                 {
                     Serial.print("Mag strength valid.\n");
-                    // delete[] Cx;
-                    // delete[] Cy;
-                    // delete[] Cz;
-                    // delete[] ignoreList;
-                    ledManager.off();
+                    delay(300);
                     return;
                 }
                 else{
@@ -228,15 +214,9 @@ void QMI8658Sensor::AutoCalibrateMag(int16_t mx, int16_t my, int16_t mz){
                     calibration.data.qmi8658 = m_Calibration;
                     configuration.setCalibration(sensorId, calibration);
                     configuration.save(sensorId);
-                    ledManager.off();
+                    delay(300);
                     return;
                 }
-                ledManager.off();
-                delay(100);
-                ledManager.on();
-                delay(100);
-                ledManager.off();
-                delay(100);
                 Mr += CaliSamples / 4;
                 if (Mr >= CaliSamples)
                     Mr -= CaliSamples;

@@ -25,7 +25,7 @@
 
 #include <QMI8658.h>
 
-#define CaliSamples 48
+#define CaliSamples 96
 #define GyroTolerance 30
 #define MagTolerance 300
 #define MagIgnoreSample 1000
@@ -50,11 +50,11 @@ private:
     float Axyz[3]{};
     float Gxyz[3]{};
     float Mxyz[3]{};
-    int16_t *Cx{};
-    int16_t *Cy{};
-    int16_t *Cz{};
-    int8_t *ignoreList{};
-    int8_t Gr = CaliSamples , Mr = CaliSamples - 1, Gf = 0, Mf = 0;
+    int16_t Cx[CaliSamples]{};
+    int16_t Cy[CaliSamples]{};
+    int16_t Cz[CaliSamples]{};
+    int8_t ignoreList[CaliSamples]{};
+    uint8_t Gr = CaliSamples , Mr = CaliSamples - 1, Gf = 0, Mf = 0;
     float MagStr = 0;
     float q[4]{1.0f, 0.0f, 0.0f, 0.0f};
     // Loop timing globals
