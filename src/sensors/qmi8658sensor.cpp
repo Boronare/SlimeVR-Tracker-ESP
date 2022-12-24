@@ -51,7 +51,7 @@ void QMI8658Sensor::getValueScaled()
     uint8_t i;
     int16_t ax, ay, az, gx, gy, gz, mx, my, mz;
     imu.getMotion9(&ax, &ay, &az, &gx, &gy, &gz, &mx, &my, &mz);
-    // m_Logger.debug("A : %+6d %+6d %+6d / G: %+6d %+6d %+6d / M:%+6d %+6d %+6d",ax,ay,az,gx,gy,gz,mx,my,mz);
+    // Serial.printf("A : %+6d %+6d %+6d / G: %+6d %+6d %+6d / M:%+6d %+6d %+6d\n",ax,ay,az,gx,gy,gz,mx,my,mz);
     AutoCalibrate(gx, gy, gz, mx, my, mz);
 
     Gxyz[0] = (gx-m_Calibration.G_off[0]) * gscale;
@@ -83,10 +83,10 @@ void QMI8658Sensor::getValueScaled()
 void QMI8658Sensor::motionLoop()
 {
     unsigned long now = micros();
-    // unsigned long deltat = now - last; // seconds since last update
+    unsigned long deltat = now - last; // seconds since last update
     last = now;
     getValueScaled();
-    // m_Logger.debug("A : %+6.0f %+6.0f %+6.0f / G : %+f %+f %+f / M: %+6.0f %+6.0f %+6.0f / Q : %+f %+f %+f %+f", Axyz[0], Axyz[1], Axyz[2], Gxyz[0], Gxyz[1], Gxyz[2], Mxyz[0];yz[0], Mxyz[0];yz[1], Mxyz[0];yz[2], q[0], q[1], q[2], q[3]);
+    // m_Logger.debug("A : %+6.0f %+6.0f %+6.0f / G : %+f %+f %+f / M: %+6.0f %+6.0f %+6.0f / Q : %+f %+f %+f %+f", Axyz[0], Axyz[1], Axyz[2], Gxyz[0], Gxyz[1], Gxyz[2], Mxyz[0],Mxyz[1], Mxyz[2], q[0], q[1], q[2], q[3]);
     mahonyQuaternionUpdate(q, Axyz[0], Axyz[1], Axyz[2], Gxyz[0], Gxyz[1], Gxyz[2], Mxyz[0], Mxyz[1], Mxyz[2], deltat * 1.0e-6);
     
     quaternion = Quat(q[1],q[2],q[3],q[0]);
@@ -173,7 +173,7 @@ void QMI8658Sensor::AutoCalibrateGyro(int16_t gx, int16_t gy, int16_t gz)
 
 void QMI8658Sensor::AutoCalibrateMag(int16_t mx, int16_t my, int16_t mz){
         ledManager.on();
-        if (abs(Cx[Mf] - mx) > MagIgnoreSample || abs(Cy[Mf] - my) > MagIgnoreSample || abs(Cz[Mf] - mz) > MagIgnoreSample)
+        if (abs(Cx[Mf] - mx) > MagTolerance*2 || abs(Cy[Mf] - my) > MagTolerance*2 || abs(Cz[Mf] - mz) > MagTolerance*4)
         {
             ledManager.off();
             if(Mf==0 && Mr == CaliSamples-1) Serial.print("Starting Magneto Calibration");
@@ -222,21 +222,21 @@ void QMI8658Sensor::AutoCalibrateMag(int16_t mx, int16_t my, int16_t mz){
                     Mr -= CaliSamples;
                 }
             }
+            delay(30);
         }
 }
 
 SlimeVR::Configuration::QMI8658CalibrationConfig QMI8658Sensor::getMagCalibration()
 {
     SlimeVR::Configuration::QMI8658CalibrationConfig retVal;
-    MagnetoCalibration *magneto = new MagnetoCalibration;
+    MagnetoCalibration magneto{};
     for (uint8_t i = 0; i < CaliSamples; i++)
     {
         if(!ignoreList[i])
-            magneto->sample(Cx[i],Cy[i],Cz[i]);
+            magneto.sample(Cx[i],Cy[i],Cz[i]);
     }
     float M_BAinv[4][3];
-    magneto->current_calibration(M_BAinv);
-    delete magneto;
+    magneto.current_calibration(M_BAinv);
     // m_Logger.debug("[INFO] Magnetometer calibration matrix:");
     // m_Logger.debug("{");
     for (int i = 0; i < 3; i++)
@@ -254,7 +254,7 @@ bool QMI8658Sensor::verifyMagCali(SlimeVR::Configuration::QMI8658CalibrationConf
 {
     // Verify if previous calibration data valid.
     uint8_t invalidCnt = 0;
-    float *magstr = new float[CaliSamples];
+    float magstr[CaliSamples];
     float avgstr = 0.0f;
     for (uint8_t i = 0; i < CaliSamples; i++)
     {
@@ -276,19 +276,17 @@ bool QMI8658Sensor::verifyMagCali(SlimeVR::Configuration::QMI8658CalibrationConf
         avgstr += magstr[i] / CaliSamples;
     }
     if(isnan(avgstr)) return false;
-    float toler = avgstr*0.1;
 
-    m_Logger.debug("Average Mag strength with given calibration : %.1f\nMag Strengths:", avgstr);
+    // Serial.printf("Average Mag strength with given calibration : %.1f\nMag Strengths:\n", avgstr);
     for (uint8_t i = 0; i < CaliSamples; i++)
     {
-        m_Logger.debug(" %.1f ", magstr[i]);
-        if (!(abs(avgstr - magstr[i]) < toler)){
+        // Serial.printf(" %.1f \n", magstr[i]);
+        if (!(abs(avgstr - magstr[i]) < MagTolerance)){
             invalidCnt++;
             ignoreList[i]=1;
         }
         else ignoreList[i]=0;
     }
-    delete[] magstr;
     if (invalidCnt < CaliSamples / 4)
     {
         MagStr = avgstr;

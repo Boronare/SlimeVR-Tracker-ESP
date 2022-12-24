@@ -26,9 +26,8 @@
 #include <QMI8658.h>
 
 #define CaliSamples 96
-#define GyroTolerance 30
-#define MagTolerance 300
-#define MagIgnoreSample 1000
+#define GyroTolerance 300
+#define MagTolerance 250
 
 class QMI8658Sensor : public Sensor
 {
@@ -37,7 +36,6 @@ public:
     ~QMI8658Sensor(){};
     void motionSetup() override final;
     void motionLoop() override final;
-    void getScaledValues(float Gxyz[3], float Axyz[3]);
     float getTemperature();
     void getValueScaled();
     void AutoCalibrate(int16_t gx, int16_t gy, int16_t gz, int16_t mx, int16_t my, int16_t mz);
