@@ -25,8 +25,8 @@
 
 #include <QMI8658.h>
 
-#define CaliSamples 96
-#define GyroTolerance 300
+#define CaliSamples 240
+#define GyroTolerance 500
 #define MagTolerance 250
 
 class QMI8658Sensor : public Sensor
@@ -48,6 +48,7 @@ private:
     float Axyz[3]{};
     float Gxyz[3]{};
     float Mxyz[3]{};
+    int16_t prevM[3]{};
     int16_t Cx[CaliSamples]{};
     int16_t Cy[CaliSamples]{};
     int16_t Cz[CaliSamples]{};

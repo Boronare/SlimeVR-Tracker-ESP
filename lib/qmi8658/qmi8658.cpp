@@ -27,7 +27,7 @@ void QMI8658::initialize(uint8_t addr, uint8_t maddr)
     I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL3, 0b01010100);
     delay(100);
     // mag -> setMode(0x0F);
-    I2Cdev::writeByte(magAddr, 0x09, 0x01 | 0x04 | 0x00 | 0x40);
+    I2Cdev::writeByte(magAddr, 0x09, 0x01 | 0x00 | 0x00 | 0x00);
     // /* config default magnetometer */
     // I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL4, 0b00000000);
     /* config default filter setting */

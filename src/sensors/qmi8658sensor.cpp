@@ -62,9 +62,11 @@ void QMI8658Sensor::getValueScaled()
     Axyz[1] = (float)ay;
     Axyz[2] = (float)az;
 
-    // Orientations of axes are set in accordance with the datasheet
-    // See Section 9.1 Orientation of Axes
-    // https://invensense.tdk.com/wp-content/uploads/2015/02/PS-MPU-9250A-01-v1.1.pdf
+    if(prevM[0] == mx && prevM[1] == my && prevM[2] == mz){
+        Mxyz[0] = 0.0; Mxyz[1] = 0.0; Mxyz[2] = 0.0;
+        return;
+    }
+    prevM[0] = mx; prevM[1] = my; prevM[2] = mz;
     Mxyz[0] = (float)mx;
     Mxyz[1] = (float)my;
     Mxyz[2] = (float)mz;
@@ -173,7 +175,7 @@ void QMI8658Sensor::AutoCalibrateGyro(int16_t gx, int16_t gy, int16_t gz)
 
 void QMI8658Sensor::AutoCalibrateMag(int16_t mx, int16_t my, int16_t mz){
         ledManager.on();
-        if (abs(Cx[Mf] - mx) > MagTolerance*2 || abs(Cy[Mf] - my) > MagTolerance*2 || abs(Cz[Mf] - mz) > MagTolerance*4)
+        if (abs(Cx[Mf] - mx) > MagTolerance || abs(Cy[Mf] - my) > MagTolerance || abs(Cz[Mf] - mz) > MagTolerance*4)
         {
             ledManager.off();
             if(Mf==0 && Mr == CaliSamples-1) Serial.print("Starting Magneto Calibration");
@@ -214,7 +216,6 @@ void QMI8658Sensor::AutoCalibrateMag(int16_t mx, int16_t my, int16_t mz){
                     calibration.data.qmi8658 = m_Calibration;
                     configuration.setCalibration(sensorId, calibration);
                     configuration.save(sensorId);
-                    delay(300);
                     return;
                 }
                 Mr += CaliSamples / 4;
@@ -222,7 +223,7 @@ void QMI8658Sensor::AutoCalibrateMag(int16_t mx, int16_t my, int16_t mz){
                     Mr -= CaliSamples;
                 }
             }
-            delay(30);
+            delay(15);
         }
 }
 
@@ -254,7 +255,6 @@ bool QMI8658Sensor::verifyMagCali(SlimeVR::Configuration::QMI8658CalibrationConf
 {
     // Verify if previous calibration data valid.
     uint8_t invalidCnt = 0;
-    float magstr[CaliSamples];
     float avgstr = 0.0f;
     for (uint8_t i = 0; i < CaliSamples; i++)
     {
@@ -272,16 +272,29 @@ bool QMI8658Sensor::verifyMagCali(SlimeVR::Configuration::QMI8658CalibrationConf
         y = ty;
         z = tz;
 #endif
-        magstr[i] = sqrt(sq(x) + sq(y) + sq(z));
-        avgstr += magstr[i] / CaliSamples;
+        avgstr += sqrt(sq(x) + sq(y) + sq(z)) / CaliSamples;
     }
     if(isnan(avgstr)) return false;
 
     // Serial.printf("Average Mag strength with given calibration : %.1f\nMag Strengths:\n", avgstr);
     for (uint8_t i = 0; i < CaliSamples; i++)
     {
+        float tx, ty, tz;
+        float x, y, z;
+        tx = Cx[i] - cali.M_B[0];
+        ty = Cy[i] - cali.M_B[1];
+        tz = Cz[i] - cali.M_B[2];
+#if useFullCalibrationMatrix == true
+        x = cali.M_Ainv[0][0] * tx + cali.M_Ainv[0][1] * ty + cali.M_Ainv[0][2] * tz;
+        y = cali.M_Ainv[1][0] * tx + cali.M_Ainv[1][1] * ty + cali.M_Ainv[1][2] * tz;
+        z = cali.M_Ainv[2][0] * tx + cali.M_Ainv[2][1] * ty + cali.M_Ainv[2][2] * tz;
+#else
+        x = tx;
+        y = ty;
+        z = tz;
+#endif
         // Serial.printf(" %.1f \n", magstr[i]);
-        if (!(abs(avgstr - magstr[i]) < MagTolerance)){
+        if (!(abs(avgstr - sqrt(sq(x) + sq(y) + sq(z))) < MagTolerance)){
             invalidCnt++;
             ignoreList[i]=1;
         }
