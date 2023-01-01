@@ -3,9 +3,9 @@
 #include "GlobalVars.h"
 #include "magneto1.4.h"
 
+#define ACCEL_SENSITIVITY_8G 4096.0f
 constexpr float gscale = (512. / 32768.0) * (PI / 180.0); // gyro default 2048 LSB per d/s -> rad/s
-
-
+constexpr float ASCALE_8G = ((32768. / ACCEL_SENSITIVITY_8G) / 32768.) * EARTH_GRAVITY;
 
 
 void QMI8658Sensor::motionSetup()
@@ -58,9 +58,9 @@ void QMI8658Sensor::getValueScaled()
     Gxyz[1] = (gy-m_Calibration.G_off[1]) * gscale;
     Gxyz[2] = (gz-m_Calibration.G_off[2]) * gscale;
 
-    Axyz[0] = (float)ax;
-    Axyz[1] = (float)ay;
-    Axyz[2] = (float)az;
+    Axyz[0] = (float)ax * ASCALE_8G - A_B[0];
+    Axyz[1] = (float)ay * ASCALE_8G - A_B[1];
+    Axyz[2] = (float)az * ASCALE_8G - A_B[2];
 
     if(prevM[0] == mx && prevM[1] == my && prevM[2] == mz){
         Mxyz[0] = 0.0; Mxyz[1] = 0.0; Mxyz[2] = 0.0;
@@ -81,6 +81,7 @@ void QMI8658Sensor::getValueScaled()
     for (i = 0; i < 3; i++)
         Mxyz[i] = (Mxyz[i] - m_Calibration.M_B[i]);
 #endif
+    // Serial.printf("Accel : %f\t%f\t%f, Raw : %d\t%d\t%d Bias : %f\t%f\t%f\n", Axyz[0], Axyz[1], Axyz[2], ax,ay,az, A_B[0],A_B[1],A_B[2]);
 }
 void QMI8658Sensor::motionLoop()
 {
@@ -90,14 +91,30 @@ void QMI8658Sensor::motionLoop()
     getValueScaled();
     // m_Logger.debug("A : %+6.0f %+6.0f %+6.0f / G : %+f %+f %+f / M: %+6.0f %+6.0f %+6.0f / Q : %+f %+f %+f %+f", Axyz[0], Axyz[1], Axyz[2], Gxyz[0], Gxyz[1], Gxyz[2], Mxyz[0],Mxyz[1], Mxyz[2], q[0], q[1], q[2], q[3]);
     mahonyQuaternionUpdate(q, Axyz[0], Axyz[1], Axyz[2], Gxyz[0], Gxyz[1], Gxyz[2], Mxyz[0], Mxyz[1], Mxyz[2], deltat * 1.0e-6);
+    VectorFloat grav;
+    grav.y = (quaternion.x * quaternion.z - quaternion.w * quaternion.y) * 2*9.8;
+    grav.x = -(quaternion.w * quaternion.x + quaternion.y * quaternion.z) * 2*9.8;
+    grav.z = (sq(quaternion.w) - sq(quaternion.x) - sq(quaternion.y) + sq(quaternion.z))*9.8;
     
     quaternion = Quat(q[1],q[2],q[3],q[0]);
     quaternion *= sensorOffset;
+#if SEND_ACCELERATION
+    {
+        // convert acceleration to m/s^2 (implicitly casts to float)
+        this->acceleration[0] = Axyz[0] - grav.x;
+        this->acceleration[1] = Axyz[1] - grav.y;
+        this->acceleration[2] = Axyz[2] - grav.z;
+    }
     if (!lastQuatSent.equalsWithEpsilon(quaternion))
     {
         newData = true;
         lastQuatSent = quaternion;
+    }else if(Axyz[0]<11 && Axyz[1]<11 && Axyz[2]<11 && this->acceleration[0]<1 && this->acceleration[1]<1 && this->acceleration[2]<1){
+        // A_B[0] = A_B[0]*0.999 + this->acceleration[0]*0.01;
+        // A_B[1] = A_B[1]*0.999 + this->acceleration[1]*0.01;
+        // A_B[2] = A_B[1]*0.999 + this->acceleration[2]*0.01;
     }
+#endif
 }
 
 float QMI8658Sensor::getTemperature()

@@ -48,6 +48,7 @@ private:
     float Axyz[3]{};
     float Gxyz[3]{};
     float Mxyz[3]{};
+    float A_B[3]{0.0f,0.0f,0.0f};
     int16_t prevM[3]{};
     int16_t Cx[CaliSamples]{};
     int16_t Cy[CaliSamples]{};
