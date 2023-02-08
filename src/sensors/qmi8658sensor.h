@@ -25,7 +25,7 @@
 
 #include <QMI8658.h>
 
-#define CaliSamples 240
+#define CaliSamples 96
 #define GyroTolerance 500
 #define MagTolerance 250
 
@@ -41,6 +41,7 @@ public:
     void AutoCalibrate(int16_t gx, int16_t gy, int16_t gz, int16_t mx, int16_t my, int16_t mz);
     void AutoCalibrateGyro(int16_t gx, int16_t gy, int16_t gz);
     void AutoCalibrateMag(int16_t mx, int16_t my, int16_t mz);
+    void startCalibration(int calibrationType);
 
 private:
     QMI8658 imu{};
@@ -61,6 +62,6 @@ private:
     uint32_t now = 0, last = 0; // micros() timers
     float deltat = 0;           // loop time in seconds
 
-    SlimeVR::Configuration::QMI8658CalibrationConfig getMagCalibration();
-    bool verifyMagCali(SlimeVR::Configuration::QMI8658CalibrationConfig cali);
+    SlimeVR::Configuration::QMI8658CalibrationConfig getMagAccCalibration();
+    bool verifyMagAccCali(SlimeVR::Configuration::QMI8658CalibrationConfig cali);
 };

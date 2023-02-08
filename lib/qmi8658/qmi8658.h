@@ -456,6 +456,7 @@ public:
 
     void getAcceleration(int16_t *ax, int16_t *ay, int16_t *az);
     void getMagneto(int16_t *mx, int16_t *my, int16_t *mz);
+    void getGyro(int16_t *gx, int16_t *gy, int16_t *gz);
 
     void getQuatDiff(int16_t *dqw, int16_t *dqx, int16_t *dqy, int16_t *dqz);
     void getVeloDiff(int16_t *dvx, int16_t *dvy, int16_t *dvz);

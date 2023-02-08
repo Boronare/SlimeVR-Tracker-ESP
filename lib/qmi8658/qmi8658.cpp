@@ -40,7 +40,7 @@ void QMI8658::initialize(uint8_t addr, uint8_t maddr)
     /* config Mag/Gyr/Acc Enabled/Disabled */
     I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL7, 0b00000011);
     // I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL7, 0b00001011);
-    delay(100);
+    delay(500);
 
 }
 
@@ -69,9 +69,17 @@ void QMI8658::getMagneto(int16_t *mx, int16_t *my, int16_t *mz)
     *mz = (((int16_t)buffer[5]) << 8) | buffer[4];
 }
 
+void QMI8658::getGyro(int16_t *gx, int16_t *gy, int16_t *gz)
+{
+    I2Cdev::readBytes(devAddr, QMI8658_RA_GX_L, 6, buffer);
+    *gx = (((int16_t)buffer[1]) << 8) | buffer[0];
+    *gy = (((int16_t)buffer[3]) << 8) | buffer[2];
+    *gz = (((int16_t)buffer[5]) << 8) | buffer[4];
+}
+
 void QMI8658::getAcceleration(int16_t *ax, int16_t *ay, int16_t *az)
 {
-    I2Cdev::readBytes(devAddr, QMI8658_RA_AX_L, 12, buffer);
+    I2Cdev::readBytes(devAddr, QMI8658_RA_AX_L, 6, buffer);
     *ax = (((int16_t)buffer[1]) << 8) | buffer[0];
     *ay = (((int16_t)buffer[3]) << 8) | buffer[2];
     *az = (((int16_t)buffer[5]) << 8) | buffer[4];
