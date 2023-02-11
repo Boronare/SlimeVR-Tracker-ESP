@@ -25,9 +25,10 @@
 
 #include <QMI8658.h>
 
-#define CaliSamples 96
+#define CaliSamples 240
 #define GyroTolerance 500
 #define MagTolerance 250
+#define AccTolerance 30
 
 class QMI8658Sensor : public Sensor
 {
@@ -38,9 +39,10 @@ public:
     void motionLoop() override final;
     float getTemperature();
     void getValueScaled();
-    void AutoCalibrate(int16_t gx, int16_t gy, int16_t gz, int16_t mx, int16_t my, int16_t mz);
-    void AutoCalibrateGyro(int16_t gx, int16_t gy, int16_t gz);
-    void AutoCalibrateMag(int16_t mx, int16_t my, int16_t mz);
+    void AutoCalibrateGyro(int16_t gx, int16_t gy, int16_t gz, int16_t mx, int16_t my, int16_t mz);
+    void CalibrateGyro(int16_t gx, int16_t gy, int16_t gz);
+    void CalibrateMag(int16_t mx, int16_t my, int16_t mz);
+    void CalibrateAcc(int16_t ax, int16_t ay, int16_t az, int16_t gx, int16_t gy, int16_t gz);
     void startCalibration(int calibrationType);
 
 private:
@@ -55,7 +57,8 @@ private:
     int16_t Cy[CaliSamples]{};
     int16_t Cz[CaliSamples]{};
     int8_t ignoreList[CaliSamples]{};
-    uint8_t Gr = CaliSamples , Mr = CaliSamples - 1, Gf = 0, Mf = 0;
+    uint8_t Cr = CaliSamples, Cf = 0;
+    uint8_t accelDupCnt = 0;
     float MagStr = 0;
     float q[4]{1.0f, 0.0f, 0.0f, 0.0f};
     // Loop timing globals
