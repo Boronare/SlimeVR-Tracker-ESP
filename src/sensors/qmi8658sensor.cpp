@@ -47,7 +47,17 @@ void QMI8658Sensor::motionSetup()
     {
     case SlimeVR::Configuration::CalibrationConfigType::QMI8658:
         m_Calibration = sensorCalibration.data.qmi8658;
-        Serial.printf("Loaded Cali : G: %f,%f,%f / M: %f,%f,%f\n",m_Calibration.G_off[0],m_Calibration.G_off[1],m_Calibration.G_off[2],m_Calibration.M_B[0],m_Calibration.M_B[1],m_Calibration.M_B[2]);
+        Serial.printf("Loaded Cali : G: %f,%f,%f / M: %f,%f,%f\n%f,%f,%f\n%f,%f,%f\n%f,%f,%f\n A: %f,%f,%f\n%f,%f,%f\n%f,%f,%f\n%f,%f,%f\n",
+                m_Calibration.G_off[0],m_Calibration.G_off[1],m_Calibration.G_off[2],
+                m_Calibration.M_B[0],m_Calibration.M_B[1],m_Calibration.M_B[2],
+                m_Calibration.M_Ainv[0][0],m_Calibration.M_Ainv[0][1],m_Calibration.M_Ainv[0][2],
+                m_Calibration.M_Ainv[1][0],m_Calibration.M_Ainv[1][1],m_Calibration.M_Ainv[1][2],
+                m_Calibration.M_Ainv[2][0],m_Calibration.M_Ainv[2][1],m_Calibration.M_Ainv[2][2],
+                m_Calibration.A_B[0],m_Calibration.A_B[1],m_Calibration.A_B[2],
+                m_Calibration.A_Ainv[0][0],m_Calibration.A_Ainv[0][1],m_Calibration.A_Ainv[0][2],
+                m_Calibration.A_Ainv[1][0],m_Calibration.A_Ainv[1][1],m_Calibration.A_Ainv[1][2],
+                m_Calibration.A_Ainv[2][0],m_Calibration.A_Ainv[2][1],m_Calibration.A_Ainv[2][2]
+        );
         break;
     default:
         m_Logger.warn("Incompatible calibration data found for sensor %d, ignoring...", sensorId);
@@ -232,14 +242,7 @@ void QMI8658Sensor::CalibrateMag(int16_t mx, int16_t my, int16_t mz){
         Cz[Cf] = mz;
         if (Cf == Cr)
         {
-            if (verifyMagAccCali(m_Calibration))
-            {
-                Serial.print("Mag strength valid.\n");
-                delay(300);
-                return;
-            }
-            else{
-                SlimeVR::Configuration::QMI8658CalibrationConfig n_Calibration = getMagAccCalibration();
+            SlimeVR::Configuration::QMI8658CalibrationConfig n_Calibration = getMagAccCalibration();
             if (verifyMagAccCali(n_Calibration))
             {
                 Serial.print("New calibration valid\n");
@@ -262,7 +265,6 @@ void QMI8658Sensor::CalibrateMag(int16_t mx, int16_t my, int16_t mz){
             Cr += CaliSamples / 4;
             if (Cr >= CaliSamples)
                 Cr -= CaliSamples;
-            }
         }
         delay(15);
     }
