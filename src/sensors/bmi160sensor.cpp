@@ -224,7 +224,7 @@ void BMI160Sensor::getScaledValues(float Gxyz[3], float Axyz[3])
         Axyz[2] = m_Calibration.A_Ainv[2][0] * temp[0] + m_Calibration.A_Ainv[2][1] * temp[1] + m_Calibration.A_Ainv[2][2] * temp[2];
     #else
         for (uint8_t i = 0; i < 3; i++)
-            Axyz[i] = (Axyz[i] - calibration->A_B[i]);
+            Axyz[i] = (Axyz[i] - m_Calibration.A_B[i]);
     #endif
 }
 

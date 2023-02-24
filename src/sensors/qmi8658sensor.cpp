@@ -26,21 +26,6 @@ void QMI8658Sensor::motionSetup()
     SlimeVR::Configuration::CalibrationConfig sensorCalibration = configuration.getCalibration(sensorId);
     
     int16_t ax, ay, az;
-    imu.getAcceleration(&ax, &ay, &az);
-    float g_az = (float)az / ACCEL_SENSITIVITY_8G;
-    if(g_az < -0.75f) {
-        ledManager.pattern(500,500,5);
-        m_Logger.info("Flip front to confirm start calibration");
-        imu.getAcceleration(&ax, &ay, &az);
-        g_az = (float)az / ACCEL_SENSITIVITY_8G;
-        if(g_az > 0.75f)
-        {
-            m_Logger.debug("Starting calibration...");
-            startCalibration(0);
-        }
-
-        ledManager.off();
-    }
 
     // If no compatible calibration data is found, the calibration data will just be zero-ed out
     switch (sensorCalibration.type)
@@ -69,6 +54,26 @@ void QMI8658Sensor::motionSetup()
             m_Calibration.M_B[i]=m_Calibration.G_off[i]=0;
         }
     }
+    imu.getAcceleration(&ax, &ay, &az);
+    float g_az = (float)az / ACCEL_SENSITIVITY_8G;
+    if(g_az < -0.75f) {
+        ledManager.pattern(500,500,5);
+        m_Logger.info("Flip front to confirm start calibration");
+        imu.getAcceleration(&ax, &ay, &az);
+        g_az = (float)az / ACCEL_SENSITIVITY_8G;
+        if(g_az > 0.75f)
+        {
+            m_Logger.debug("Starting calibration...");
+            startCalibration(0);
+        }
+
+        ledManager.off();
+    }
+    
+    if(m_Calibration.M_B[0]==0.0 && m_Calibration.M_B[1]==0.0 && m_Calibration.M_B[2]==0.0){
+        Cf=0;
+        Cr=CaliSamples-1;
+    }
         
     working = true;
 }
@@ -78,6 +83,7 @@ void QMI8658Sensor::getValueScaled()
     uint8_t i;
     int16_t ax, ay, az, gx, gy, gz, mx, my, mz;
     imu.getMotion9(&ax, &ay, &az, &gx, &gy, &gz, &mx, &my, &mz);
+    AutoCalibrateGyro(gx,gy,gz,mx,my,mz);
     // Serial.printf("A : %+6d %+6d %+6d / G: %+6d %+6d %+6d / M:%+6d %+6d %+6d\n",ax,ay,az,gx,gy,gz,mx,my,mz);
 
     Gxyz[0] = (gx-m_Calibration.G_off[0]) * gscale;
@@ -96,7 +102,7 @@ void QMI8658Sensor::getValueScaled()
         Axyz[2] = m_Calibration.A_Ainv[2][0] * temp[0] + m_Calibration.A_Ainv[2][1] * temp[1] + m_Calibration.A_Ainv[2][2] * temp[2];
     #else
         for (uint8_t i = 0; i < 3; i++)
-            Axyz[i] = (Axyz[i] - calibration->A_B[i]);
+            Axyz[i] = (Axyz[i] - m_Calibration.A_B[i])/ACCEL_SENSITIVITY_8G;
     #endif
 
     if(prevM[0] == mx && prevM[1] == my && prevM[2] == mz){
@@ -129,18 +135,19 @@ void QMI8658Sensor::motionLoop()
     // m_Logger.debug("A : %+6.0f %+6.0f %+6.0f / G : %+f %+f %+f / M: %+6.0f %+6.0f %+6.0f / Q : %+f %+f %+f %+f", Axyz[0], Axyz[1], Axyz[2], Gxyz[0], Gxyz[1], Gxyz[2], Mxyz[0],Mxyz[1], Mxyz[2], q[0], q[1], q[2], q[3]);
     mahonyQuaternionUpdate(q, Axyz[0], Axyz[1], Axyz[2], Gxyz[0], Gxyz[1], Gxyz[2], Mxyz[0], Mxyz[1], Mxyz[2], deltat * 1.0e-6);
     VectorFloat grav;
-    grav.y = (quaternion.x * quaternion.z - quaternion.w * quaternion.y) * 2*9.8;
-    grav.x = -(quaternion.w * quaternion.x + quaternion.y * quaternion.z) * 2*9.8;
-    grav.z = (sq(quaternion.w) - sq(quaternion.x) - sq(quaternion.y) + sq(quaternion.z))*9.8;
+    grav.y = (quaternion.x * quaternion.z - quaternion.w * quaternion.y) * 2;
+    grav.x = -(quaternion.w * quaternion.x + quaternion.y * quaternion.z) * 2;
+    grav.z = (sq(quaternion.w) - sq(quaternion.x) - sq(quaternion.y) + sq(quaternion.z));
     
     quaternion = Quat(q[1],q[2],q[3],q[0]);
     quaternion *= sensorOffset;
+    // Serial.printf("Axyz:%+f %+f %+f, Grav:%+f %+f %+f\n",Axyz[0],Axyz[1],Axyz[2],grav.x,grav.y,grav.z);
 #if SEND_ACCELERATION
     {
         // convert acceleration to m/s^2 (implicitly casts to float)
-        this->acceleration[0] = Axyz[0] - grav.x;
-        this->acceleration[1] = Axyz[1] - grav.y;
-        this->acceleration[2] = Axyz[2] - grav.z;
+        acceleration[0] = (Axyz[0] - grav.x)*EARTH_GRAVITY;
+        acceleration[1] = (Axyz[1] - grav.y)*EARTH_GRAVITY;
+        acceleration[2] = (Axyz[2] - grav.z)*EARTH_GRAVITY;
     }
     if (!lastQuatSent.equalsWithEpsilon(quaternion))
     {
@@ -156,10 +163,11 @@ float QMI8658Sensor::getTemperature()
 }
 void QMI8658Sensor::AutoCalibrateGyro(int16_t gx, int16_t gy, int16_t gz, int16_t mx, int16_t my, int16_t mz){
     if (Cf != Cr){
-        if(abs(acceleration[0])<0.1 && abs(acceleration[1])<0.1 && abs(acceleration[2])<0.1)
+        if(m_Calibration.M_B[0]==0.0 && m_Calibration.M_B[1] == 0.0 && m_Calibration.M_B[2] == 0.0)
+            CalibrateMag(mx,my,mz);
+        else
             CalibrateGyro(gx,gy,gz);
-    }
-    else{
+    }else{
         Cr += CaliSamples / 4;
         if (Cr > CaliSamples || Cf >= CaliSamples)
         {
@@ -196,8 +204,14 @@ void QMI8658Sensor::CalibrateGyro(int16_t gx, int16_t gy, int16_t gz)
             az += Cz[i] - m_Calibration.G_off[2];
         }
         if (abs(ax) < (0.002 * CaliSamples/gscale) && abs(ay) <  0.002 * CaliSamples/gscale && abs(az) < 0.002 * CaliSamples/gscale
-            && vx < sq(GyroTolerance) * (CaliSamples - 1) && vy < sq(GyroTolerance) * (CaliSamples - 1) && vz < sq(GyroTolerance) * (CaliSamples - 1))
-            return;
+            && vx < sq(GyroTolerance) * (CaliSamples - 1) && vy < sq(GyroTolerance) * (CaliSamples - 1) && vz < sq(GyroTolerance) * (CaliSamples - 1)){
+                SlimeVR::Configuration::CalibrationConfig calibration;
+                calibration.type = SlimeVR::Configuration::CalibrationConfigType::QMI8658;
+                calibration.data.qmi8658 = m_Calibration;
+                configuration.setCalibration(sensorId, calibration);
+                configuration.save(sensorId);
+                return;
+            }
         // m_Logger.debug("Gyro Calibration Failed : %f/%f/%f/%f/%f/%f",ax,ay,az,vx,vy,vz);
         vx = 0.0;
         vy = 0.0;
@@ -260,6 +274,8 @@ void QMI8658Sensor::CalibrateMag(int16_t mx, int16_t my, int16_t mz){
                 calibration.data.qmi8658 = m_Calibration;
                 configuration.setCalibration(sensorId, calibration);
                 configuration.save(sensorId);
+                Cf = 0;
+                Cr = CaliSamples;
                 return;
             }
             Cr += CaliSamples / 4;
@@ -350,6 +366,7 @@ SlimeVR::Configuration::QMI8658CalibrationConfig QMI8658Sensor::getMagAccCalibra
 }
 bool QMI8658Sensor::verifyMagAccCali(SlimeVR::Configuration::QMI8658CalibrationConfig cali)
 {
+    return true;
     // Verify if previous calibration data valid.
     uint8_t invalidCnt = 0;
     float avgstr = 0.0f;
@@ -391,7 +408,7 @@ bool QMI8658Sensor::verifyMagAccCali(SlimeVR::Configuration::QMI8658CalibrationC
         z = tz;
 #endif
         // Serial.printf(" %.1f \n", magstr[i]);
-        if (!(abs(avgstr - sqrt(sq(x) + sq(y) + sq(z))) < MagTolerance)){
+        if (!(abs(avgstr - sqrt(sq(x) + sq(y) + sq(z))) < MagTolerance*1.5)){
             invalidCnt++;
             ignoreList[i]=1;
         }
@@ -429,6 +446,7 @@ void QMI8658Sensor::startCalibration(int calibrationType) {
     while(Cf!=Cr){
         int16_t mx,my,mz;
         imu.getMagneto(&mx,&my,&mz);
+        // Serial.printf("Mag Sample : %+6d %+6d %+6d\n",mx,my,mz);
         CalibrateMag(mx,my,mz);
         delay(20);
     }
