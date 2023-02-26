@@ -65,6 +65,8 @@ void QMI8658Sensor::motionSetup()
         {
             m_Logger.debug("Starting calibration...");
             startCalibration(0);
+        }else{
+            accelDupCnt = 255;
         }
 
         ledManager.off();
@@ -105,7 +107,7 @@ void QMI8658Sensor::getValueScaled()
             Axyz[i] = (Axyz[i] - m_Calibration.A_B[i])/ACCEL_SENSITIVITY_8G;
     #endif
 
-    if(prevM[0] == mx && prevM[1] == my && prevM[2] == mz){
+    if((prevM[0] == mx && prevM[1] == my && prevM[2] == mz) || accelDupCnt == 255){
         Mxyz[0] = 0.0; Mxyz[1] = 0.0; Mxyz[2] = 0.0;
         return;
     }
@@ -135,9 +137,9 @@ void QMI8658Sensor::motionLoop()
     // m_Logger.debug("A : %+6.0f %+6.0f %+6.0f / G : %+f %+f %+f / M: %+6.0f %+6.0f %+6.0f / Q : %+f %+f %+f %+f", Axyz[0], Axyz[1], Axyz[2], Gxyz[0], Gxyz[1], Gxyz[2], Mxyz[0],Mxyz[1], Mxyz[2], q[0], q[1], q[2], q[3]);
     mahonyQuaternionUpdate(q, Axyz[0], Axyz[1], Axyz[2], Gxyz[0], Gxyz[1], Gxyz[2], Mxyz[0], Mxyz[1], Mxyz[2], deltat * 1.0e-6);
     VectorFloat grav;
-    grav.y = (quaternion.x * quaternion.z - quaternion.w * quaternion.y) * 2;
-    grav.x = -(quaternion.w * quaternion.x + quaternion.y * quaternion.z) * 2;
-    grav.z = (sq(quaternion.w) - sq(quaternion.x) - sq(quaternion.y) + sq(quaternion.z));
+    grav.x = (q[1] * q[3] - q[0] * q[2]) * 2;
+    grav.y = (q[0] * q[1] + q[2] * q[3]) * 2;
+    grav.z = (sq(q[0]) - sq(q[1]) - sq(q[2]) + sq(q[3]));
     
     quaternion = Quat(q[1],q[2],q[3],q[0]);
     quaternion *= sensorOffset;
@@ -274,8 +276,6 @@ void QMI8658Sensor::CalibrateMag(int16_t mx, int16_t my, int16_t mz){
                 calibration.data.qmi8658 = m_Calibration;
                 configuration.setCalibration(sensorId, calibration);
                 configuration.save(sensorId);
-                Cf = 0;
-                Cr = CaliSamples;
                 return;
             }
             Cr += CaliSamples / 4;
@@ -351,17 +351,17 @@ SlimeVR::Configuration::QMI8658CalibrationConfig QMI8658Sensor::getMagAccCalibra
     }
     float M_BAinv[4][3];
     magneto.current_calibration(M_BAinv);
-    // m_Logger.debug("[INFO] Magnetometer calibration matrix:");
-    // m_Logger.debug("{");
+    m_Logger.debug("[INFO] Magnetometer calibration matrix:");
+    m_Logger.debug("{");
     for (int i = 0; i < 3; i++)
     {
         retVal.M_B[i] = M_BAinv[0][i];
         retVal.M_Ainv[0][i] = M_BAinv[1][i];
         retVal.M_Ainv[1][i] = M_BAinv[2][i];
         retVal.M_Ainv[2][i] = M_BAinv[3][i];
-        // m_Logger.debug("  %f, %f, %f, %f", M_BAinv[0][i], M_BAinv[1][i], M_BAinv[2][i], M_BAinv[3][i]);
+        m_Logger.debug("  %f, %f, %f, %f", M_BAinv[0][i], M_BAinv[1][i], M_BAinv[2][i], M_BAinv[3][i]);
     }
-    // m_Logger.debug("}");
+    m_Logger.debug("}");
     return retVal;
 }
 bool QMI8658Sensor::verifyMagAccCali(SlimeVR::Configuration::QMI8658CalibrationConfig cali)
