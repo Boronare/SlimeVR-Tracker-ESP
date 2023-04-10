@@ -39,7 +39,7 @@ void Sensor::sendData()
 
 #if SEND_ACCELERATION
         {
-            Network::sendAccel(acceleration, sensorId);
+            Network::sendAccel(linearAcceleration, sensorId);
         }
 #endif
 
@@ -49,28 +49,34 @@ void Sensor::sendData()
     }
 }
 
-const char *getIMUNameByType(int imuType)
-{
-    switch (imuType)
-    {
-    case IMU_MPU9250:
-        return "MPU9250";
-    case IMU_MPU6500:
-        return "MPU6500";
-    case IMU_BNO080:
-        return "BNO080";
-    case IMU_BNO085:
-        return "BNO085";
-    case IMU_BNO055:
-        return "BNO055";
-    case IMU_MPU6050:
-        return "MPU6050";
-    case IMU_BNO086:
-        return "BNO086";
-    case IMU_BMI160:
-        return "BMI160";
-    case IMU_ICM20948:
-        return "ICM20948";
+void Sensor::printTemperatureCalibrationUnsupported() {
+    m_Logger.error("Temperature calibration not supported for IMU %s", getIMUNameByType(sensorType));
+}
+void Sensor::printTemperatureCalibrationState() { printTemperatureCalibrationUnsupported(); };
+void Sensor::printDebugTemperatureCalibrationState() { printTemperatureCalibrationUnsupported(); };
+void Sensor::saveTemperatureCalibration() { printTemperatureCalibrationUnsupported(); };
+void Sensor::resetTemperatureCalibrationState() { printTemperatureCalibrationUnsupported(); };
+
+const char * getIMUNameByType(int imuType) {
+    switch(imuType) {
+        case IMU_MPU9250:
+            return "MPU9250";
+        case IMU_MPU6500:
+            return "MPU6500";
+        case IMU_BNO080:
+            return "BNO080";
+        case IMU_BNO085:
+            return "BNO085";
+        case IMU_BNO055:
+            return "BNO055";
+        case IMU_MPU6050:
+            return "MPU6050";
+        case IMU_BNO086:
+            return "BNO086";
+        case IMU_BMI160:
+            return "BMI160";
+        case IMU_ICM20948:
+            return "ICM20948";
     }
     return "Unknown";
 }

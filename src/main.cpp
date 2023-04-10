@@ -45,6 +45,7 @@ int sensorToCalibrate = -1;
 bool blinking = false;
 unsigned long blinkStart = 0;
 unsigned long loopTime = 0;
+unsigned long lastStatePrint = 0;
 bool secondImuActive = false;
 BatteryMonitor battery;
 
@@ -70,7 +71,7 @@ void setup()
 
     SerialCommands::setUp();
 
-#if IMU == IMU_MPU6500 || IMU == IMU_MPU6050 || IMU == IMU_MPU9250 || IMU == IMU_BNO055 || IMU == IMU_ICM20948
+#if IMU == IMU_MPU6500 || IMU == IMU_MPU6050 || IMU == IMU_MPU9250 || IMU == IMU_BNO055 || IMU == IMU_ICM20948 || IMU == IMU_BMI160
     I2CSCAN::clearBus(PIN_IMU_SDA, PIN_IMU_SCL); // Make sure the bus isn't stuck when resetting ESP without powering it down
     // Fixes I2C issues for certain IMUs. Only has been tested on IMUs above. Testing advised when adding other IMUs.
 #endif
@@ -86,6 +87,9 @@ void setup()
 
 #ifdef ESP8266
     Wire.setClockStretchLimit(150000L); // Default stretch limit 150mS
+#endif
+#ifdef ESP32 // Counterpart on ESP32 to ClockStretchLimit
+    Wire.setTimeOut(150);
 #endif
     Wire.setClock(I2C_SPEED);
 
@@ -113,7 +117,6 @@ void loop()
     sensorManager.update();
     battery.Loop();
     ledManager.update();
-
 #ifdef TARGET_LOOPTIME_MICROS
     long elapsed = (micros() - loopTime);
     if (elapsed < TARGET_LOOPTIME_MICROS)
@@ -132,4 +135,11 @@ void loop()
     }
     loopTime = micros();
 #endif
+    #if defined(PRINT_STATE_EVERY_MS) && PRINT_STATE_EVERY_MS > 0
+        unsigned long now = millis();
+        if(lastStatePrint + PRINT_STATE_EVERY_MS < now) {
+            lastStatePrint = now;
+            SerialCommands::printState();
+        }
+    #endif
 }
