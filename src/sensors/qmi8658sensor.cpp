@@ -5,7 +5,7 @@
 
 #define ACCEL_SENSITIVITY_8G 4096.0f
 constexpr float gscale = (512. / 32768.0) * (PI / 180.0); // gyro default 2048 LSB per d/s -> rad/s
-constexpr float ASCALE_8G = ((32768. / ACCEL_SENSITIVITY_8G) / 32768.) * EARTH_GRAVITY;
+constexpr float ASCALE_8G = ((32768. / ACCEL_SENSITIVITY_8G) / 32768.) * CONST_EARTH_GRAVITY;
 
 
 void QMI8658Sensor::motionSetup()
@@ -155,9 +155,9 @@ void QMI8658Sensor::motionLoop()
 #if SEND_ACCELERATION
     {
         // convert acceleration to m/s^2 (implicitly casts to float)
-        acceleration[0] = (Axyz[0] - grav[0])*EARTH_GRAVITY;
-        acceleration[1] = (Axyz[1] - grav[1])*EARTH_GRAVITY;
-        acceleration[2] = (Axyz[2] - grav[2])*EARTH_GRAVITY;
+        linearAcceleration[0] = (Axyz[0] - grav[0])*CONST_EARTH_GRAVITY;
+        linearAcceleration[1] = (Axyz[1] - grav[1])*CONST_EARTH_GRAVITY;
+        linearAcceleration[2] = (Axyz[2] - grav[2])*CONST_EARTH_GRAVITY;
     }
     if (!lastQuatSent.equalsWithEpsilon(quaternion))
     {
@@ -439,7 +439,7 @@ bool QMI8658Sensor::verifyMagAccCali(SlimeVR::Configuration::QMI8658CalibrationC
 }
 
 void QMI8658Sensor::startCalibration(int calibrationType) {
-    acceleration[0]=acceleration[1]=acceleration[2]=0.0;
+    linearAcceleration[0]=linearAcceleration[1]=linearAcceleration[2]=0.0;
     while(Cf!=Cr){
         int16_t gx,gy,gz;
         imu.getGyro(&gx,&gy,&gz);
