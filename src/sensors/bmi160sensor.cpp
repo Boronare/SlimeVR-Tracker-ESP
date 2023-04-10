@@ -751,7 +751,7 @@ void BMI160Sensor::applyMagCalibrationAndScale(sensor_real_t Mxyz[3]) {
             Mxyz[1] = m_Calibration.M_Ainv[1][0] * temp[0] + m_Calibration.M_Ainv[1][1] * temp[1] + m_Calibration.M_Ainv[1][2] * temp[2];
             Mxyz[2] = m_Calibration.M_Ainv[2][0] * temp[0] + m_Calibration.M_Ainv[2][1] * temp[1] + m_Calibration.M_Ainv[2][2] * temp[2];
         #else
-            for (i = 0; i < 3; i++)
+            for (uint8_t i = 0; i < 3; i++)
                 Mxyz[i] = (Mxyz[i] - m_Calibration.M_B[i]);
         #endif
     #endif

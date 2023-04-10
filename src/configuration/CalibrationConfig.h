@@ -93,6 +93,8 @@ namespace SlimeVR
             // accelerometer offsets and correction matrix
             float A_B[3];
             float A_Ainv[3][3];
+
+            float temperature;
         };
 
         enum CalibrationConfigType

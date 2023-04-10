@@ -21,17 +21,17 @@ void QMI8658::initialize(uint8_t addr, uint8_t maddr)
     I2Cdev::writeByte(magAddr, 0x0B, 0x01);
 
     /* config default accelerometer */
-    I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL2, 0b00100100);
+    I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL2, 0b00100010);
     delay(100);
     /* config default gyroscope */
-    I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL3, 0b01010100);
+    I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL3, 0b01010010);
     delay(100);
     // mag -> setMode(0x0F);
     I2Cdev::writeByte(magAddr, 0x09, 0x01 | 0x01 | 0x00 | 0x00);
     // /* config default magnetometer */
     // I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL4, 0b00000000);
     /* config default filter setting */
-    I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL5, 0b00010001);
+    I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL5, 0b00110011);
     delay(100);
     /* config default AttitudeEngine Settings */
     I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL6, 0b00000111);
@@ -85,6 +85,11 @@ void QMI8658::getAcceleration(int16_t *ax, int16_t *ay, int16_t *az)
     *az = (((int16_t)buffer[5]) << 8) | buffer[4];
 }
 
+bool QMI8658::getSensorTime(uint32_t *time){
+    I2Cdev::readBytes(devAddr, QMI8658_RA_TIMESTAMP_LOW, 3, buffer);
+    *time = ((uint32_t)buffer[2]<<16) | ((uint32_t)buffer[1]<<8) | buffer[0];
+    return true;
+}
 void QMI8658::getQuatDiff(int16_t *dqw, int16_t *dqx, int16_t *dqy, int16_t *dqz)
 {
     uint8_t tmp, tmp2;

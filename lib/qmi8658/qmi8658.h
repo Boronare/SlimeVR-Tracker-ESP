@@ -460,7 +460,7 @@ public:
 
     void getQuatDiff(int16_t *dqw, int16_t *dqx, int16_t *dqy, int16_t *dqz);
     void getVeloDiff(int16_t *dvx, int16_t *dvy, int16_t *dvz);
-
+    bool getSensorTime(uint32_t *time);
     int16_t getTemperature();
 
     bool getFIFOHeaderModeEnabled();
