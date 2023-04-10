@@ -81,7 +81,6 @@ void QMI8658Sensor::motionSetup()
 }
 void QMI8658Sensor::getValueScaled()
 {
-    float temp[3];
     uint8_t i;
     int16_t ax, ay, az, gx, gy, gz, mx, my, mz;
     imu.getMotion9(&ax, &ay, &az, &gx, &gy, &gz, &mx, &my, &mz);
@@ -107,10 +106,10 @@ void QMI8658Sensor::getValueScaled()
             Axyz[i] = (Axyz[i] - m_Calibration.A_B[i])/ACCEL_SENSITIVITY_8G;
     #endif
 
-    if((prevM[0] == mx && prevM[1] == my && prevM[2] == mz) || accelDupCnt == 255){
-        Mxyz[0] = 0.0; Mxyz[1] = 0.0; Mxyz[2] = 0.0;
-        return;
-    }
+    // if((prevM[0] == mx && prevM[1] == my && prevM[2] == mz) || accelDupCnt == 255){
+    //     Mxyz[0] = 0.0; Mxyz[1] = 0.0; Mxyz[2] = 0.0;
+    //     return;
+    // }
     prevM[0] = mx; prevM[1] = my; prevM[2] = mz;
     Mxyz[0] = (float)mx;
     Mxyz[1] = (float)my;
@@ -136,10 +135,19 @@ void QMI8658Sensor::motionLoop()
     getValueScaled();
     // m_Logger.debug("A : %+6.0f %+6.0f %+6.0f / G : %+f %+f %+f / M: %+6.0f %+6.0f %+6.0f / Q : %+f %+f %+f %+f", Axyz[0], Axyz[1], Axyz[2], Gxyz[0], Gxyz[1], Gxyz[2], Mxyz[0],Mxyz[1], Mxyz[2], q[0], q[1], q[2], q[3]);
     mahonyQuaternionUpdate(q, Axyz[0], Axyz[1], Axyz[2], Gxyz[0], Gxyz[1], Gxyz[2], Mxyz[0], Mxyz[1], Mxyz[2], deltat * 1.0e-6);
-    VectorFloat grav;
-    grav.x = (q[1] * q[3] - q[0] * q[2]) * 2;
-    grav.y = (q[0] * q[1] + q[2] * q[3]) * 2;
-    grav.z = (sq(q[0]) - sq(q[1]) - sq(q[2]) + sq(q[3]));
+    // if(!Kalman.bUpdate(Gxyz,Axyz,Mxyz)){
+    //     Serial.print("Vreset!");
+    //     float qi[4] = {1,0,0,0};
+    //     Kalman.vReset(qi);
+    // }
+    // float* qt = Kalman.GetX();
+    // Serial.printf("Q:%f,%f,%f,%f\n",qt[0],qt[1],qt[2],qt[3]);
+    // q[0] = qt[0]; q[1] = qt[1]; q[2] = qt[2]; q[3] = qt[3];
+    
+    float grav[3];
+    grav[0] = (q[1] * q[3] - q[0] * q[2]) * 2;
+    grav[1] = (q[0] * q[1] + q[2] * q[3]) * 2;
+    grav[2] = (sq(q[0]) - sq(q[1]) - sq(q[2]) + sq(q[3]));
     
     quaternion = Quat(q[1],q[2],q[3],q[0]);
     quaternion *= sensorOffset;
@@ -147,9 +155,9 @@ void QMI8658Sensor::motionLoop()
 #if SEND_ACCELERATION
     {
         // convert acceleration to m/s^2 (implicitly casts to float)
-        acceleration[0] = (Axyz[0] - grav.x)*EARTH_GRAVITY;
-        acceleration[1] = (Axyz[1] - grav.y)*EARTH_GRAVITY;
-        acceleration[2] = (Axyz[2] - grav.z)*EARTH_GRAVITY;
+        acceleration[0] = (Axyz[0] - grav[0])*EARTH_GRAVITY;
+        acceleration[1] = (Axyz[1] - grav[1])*EARTH_GRAVITY;
+        acceleration[2] = (Axyz[2] - grav[2])*EARTH_GRAVITY;
     }
     if (!lastQuatSent.equalsWithEpsilon(quaternion))
     {
@@ -210,8 +218,12 @@ void QMI8658Sensor::CalibrateGyro(int16_t gx, int16_t gy, int16_t gz)
                 SlimeVR::Configuration::CalibrationConfig calibration;
                 calibration.type = SlimeVR::Configuration::CalibrationConfigType::QMI8658;
                 calibration.data.qmi8658 = m_Calibration;
-                configuration.setCalibration(sensorId, calibration);
-                configuration.save(sensorId);
+                SlimeVR::Configuration::QMI8658CalibrationConfig o_Calibration = configuration.getCalibration(sensorId).data.qmi8658;
+                if(abs(o_Calibration.G_off[0]-m_Calibration.G_off[0])> (0.004 /gscale)||abs(o_Calibration.G_off[1]-m_Calibration.G_off[1])> (0.004 /gscale)||abs(o_Calibration.G_off[2]-m_Calibration.G_off[2])> (0.004 /gscale))
+                {
+                    configuration.setCalibration(sensorId, calibration);
+                    configuration.save(sensorId);
+                }
                 return;
             }
         // m_Logger.debug("Gyro Calibration Failed : %f/%f/%f/%f/%f/%f",ax,ay,az,vx,vy,vz);
@@ -293,7 +305,7 @@ void QMI8658Sensor::CalibrateAcc(int16_t ax, int16_t ay, int16_t az, int16_t gx,
         ledManager.off();
         if(accelDupCnt<=CaliSamples/12){
             accelDupCnt++;
-            if(Cf==0 && Cr == CaliSamples-1) Serial.print("Starting Magneto Calibration");
+            if(Cf==0 && Cr == CaliSamples-1) Serial.print("Starting Accelero Calibration");
             Cf++;
             if (Cf >= CaliSamples)
                 Cf = 0;
@@ -414,7 +426,7 @@ bool QMI8658Sensor::verifyMagAccCali(SlimeVR::Configuration::QMI8658CalibrationC
         }
         else ignoreList[i]=0;
     }
-    if (invalidCnt < CaliSamples / 4)
+    if (invalidCnt < CaliSamples / 8)
     {
         MagStr = avgstr;
         return true;

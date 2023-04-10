@@ -24,6 +24,7 @@
 #include "logging/Logger.h"
 
 #include <QMI8658.h>
+// #include <ekf.h>
 
 #define CaliSamples 240
 #define GyroTolerance 500
@@ -57,10 +58,11 @@ private:
     int16_t Cy[CaliSamples]{};
     int16_t Cz[CaliSamples]{};
     int8_t ignoreList[CaliSamples]{};
+    float q[4]{1.0f, 0.0f, 0.0f, 0.0f};
+    // EKF Kalman{q};
     uint8_t Cr = CaliSamples, Cf = 0;
     uint8_t accelDupCnt = 0;
     float MagStr = 0;
-    float q[4]{1.0f, 0.0f, 0.0f, 0.0f};
     // Loop timing globals
     uint32_t now = 0, last = 0; // micros() timers
     float deltat = 0;           // loop time in seconds
