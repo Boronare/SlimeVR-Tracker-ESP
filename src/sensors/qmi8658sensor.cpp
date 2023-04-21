@@ -5,13 +5,14 @@
 #include "magneto1.4.h"
 
 #define ACCEL_SENSITIVITY_8G 4096.0f
-constexpr float gscale = (512. / 32768.0) * (PI / 180.0) * 1.302 ; // gyro default 2048 LSB per d/s -> rad/s
+constexpr float gscale = (1024. / 32768.0) * (PI / 180.0) ; // gyro default 2048 LSB per d/s -> rad/s
 constexpr float ASCALE_8G = ((32768. / ACCEL_SENSITIVITY_8G) / 32768.) * CONST_EARTH_GRAVITY;
 
 
 void QMI8658Sensor::motionSetup()
 {
     // initialize device
+
     imu.initialize(addr, 0x2C + sensorId);
     if (!imu.testConnection())
     {
@@ -119,6 +120,14 @@ void QMI8658Sensor::getValueScaled()
                 for (i = 0; i < 3; i++)
                     Mxyz[i] = (Mxyz[i] - m_Calibration.M_B[i]);
             #endif
+            if( prevM[0]==Mxyz[0] && prevM[1] == Mxyz[1] && prevM[2] == Mxyz[2] ){
+                Mxyz[0]=Mxyz[1]=Mxyz[2]=0.0f;
+            }
+            else{
+                prevM[0]=Mxyz[0];
+                prevM[1]=Mxyz[1];
+                prevM[2]=Mxyz[2];
+            }
             vqf.updateMag(Mxyz);
         }
        
@@ -191,6 +200,8 @@ void QMI8658Sensor::getValueScaled()
 
     fusionUpdated = true;
     optimistic_yield(100);
+    }else{
+        if(!imu.isAlive()) imu.initialize(addr, 0x2C+sensorId);
     }
 //     // AutoCalibrateGyro(gx,gy,gz,mx,my,mz);
 //     // Serial.printf("A : %+6d %+6d %+6d / G: %+6d %+6d %+6d / M:%+6d %+6d %+6d\n",ax,ay,az,gx,gy,gz,mx,my,mz);
@@ -380,17 +391,17 @@ void QMI8658Sensor::CalibrateGyro(int16_t gx, int16_t gy, int16_t gz)
             az += Cz[i] - m_Calibration.G_off[2];
             m_Calibration.temperature = getTemperature();
         }
-        if (abs(ax) < (0.002 * CaliSamples/gscale) && abs(ay) <  0.002 * CaliSamples/gscale && abs(az) < 0.002 * CaliSamples/gscale
+        if (abs(ax) < (0.001 * CaliSamples/gscale) && abs(ay) <  0.001 * CaliSamples/gscale && abs(az) < 0.001 * CaliSamples/gscale
             && vx < sq(GyroTolerance) * (CaliSamples - 1) && vy < sq(GyroTolerance) * (CaliSamples - 1) && vz < sq(GyroTolerance) * (CaliSamples - 1)){
                 SlimeVR::Configuration::CalibrationConfig calibration;
                 calibration.type = SlimeVR::Configuration::CalibrationConfigType::QMI8658;
                 calibration.data.qmi8658 = m_Calibration;
-                SlimeVR::Configuration::QMI8658CalibrationConfig o_Calibration = configuration.getCalibration(sensorId).data.qmi8658;
-                if(abs(o_Calibration.G_off[0]-m_Calibration.G_off[0])> (0.004 /gscale)||abs(o_Calibration.G_off[1]-m_Calibration.G_off[1])> (0.004 /gscale)||abs(o_Calibration.G_off[2]-m_Calibration.G_off[2])> (0.004 /gscale))
-                {
+                // SlimeVR::Configuration::QMI8658CalibrationConfig o_Calibration = configuration.getCalibration(sensorId).data.qmi8658;
+                // if(abs(o_Calibration.G_off[0]-m_Calibration.G_off[0])> (0.004 /gscale)||abs(o_Calibration.G_off[1]-m_Calibration.G_off[1])> (0.004 /gscale)||abs(o_Calibration.G_off[2]-m_Calibration.G_off[2])> (0.004 /gscale))
+                // {
                     configuration.setCalibration(sensorId, calibration);
                     configuration.save(sensorId);
-                }
+                // }
                 return;
             }
         // m_Logger.debug("Gyro Calibration Failed : %f/%f/%f/%f/%f/%f",ax,ay,az,vx,vy,vz);

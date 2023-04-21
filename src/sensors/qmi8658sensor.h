@@ -32,13 +32,13 @@
 // #include <ekf.h>
 
 #define CaliSamples 240
-#define GyroTolerance 500
+#define GyroTolerance 250
 #define MagTolerance 250
 #define AccTolerance 30
 
-#define QMI8658_TIMESTAMP_RESOLUTION_MICROS 139.38f
+#define QMI8658_TIMESTAMP_RESOLUTION_MICROS 14285.f
 #define QMI8658_MAP_ODR_MICROS(micros) ((uint16_t)((micros) / QMI8658_TIMESTAMP_RESOLUTION_MICROS) * QMI8658_TIMESTAMP_RESOLUTION_MICROS)
-constexpr float QMI8658_ODR_HZ = 65.1f;
+constexpr float QMI8658_ODR_HZ = 70.0f;
 constexpr float QMI8658_ODR_MICROS = QMI8658_MAP_ODR_MICROS(1.0f / QMI8658_ODR_HZ * 1e6f);
 
 struct QMI8658VQFParams: VQFParams {
