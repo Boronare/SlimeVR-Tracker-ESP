@@ -5,7 +5,7 @@
 #include "magneto1.4.h"
 
 #define ACCEL_SENSITIVITY_8G 4096.0f
-constexpr float gscale = (1024. / 32768.0) * (PI / 180.0) ; // gyro default 2048 LSB per d/s -> rad/s
+constexpr float gscale = (512. / 32768.0) * (PI / 180.0) ; // gyro default 2048 LSB per d/s -> rad/s
 constexpr float ASCALE_8G = ((32768. / ACCEL_SENSITIVITY_8G) / 32768.) * CONST_EARTH_GRAVITY;
 
 
