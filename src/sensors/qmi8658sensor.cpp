@@ -5,7 +5,7 @@
 #include "magneto1.4.h"
 
 #define ACCEL_SENSITIVITY_8G 4096.0f
-constexpr float gscale = (512. / 32768.0) * (PI / 180.0) ; // gyro default 2048 LSB per d/s -> rad/s
+constexpr float gscale = (1024. / 32768.0) * (PI / 180.0) ; // gyro default 2048 LSB per d/s -> rad/s
 constexpr float ASCALE_8G = ((32768. / ACCEL_SENSITIVITY_8G) / 32768.) * CONST_EARTH_GRAVITY;
 
 
@@ -82,7 +82,7 @@ void QMI8658Sensor::motionSetup()
     gyroTempCalibrator = new GyroTemperatureCalibrator(
         SlimeVR::Configuration::CalibrationConfigType::QMI8658,
         sensorId,
-        32800.0f/512.0f,
+        32678.0f/1024.0f,
         (TEMP_CALIBRATION_SECONDS_PER_STEP / 20e-3)
     );
 
@@ -127,8 +127,8 @@ void QMI8658Sensor::getValueScaled()
                 prevM[0]=Mxyz[0];
                 prevM[1]=Mxyz[1];
                 prevM[2]=Mxyz[2];
+                vqf.updateMag(Mxyz);
             }
-            vqf.updateMag(Mxyz);
         }
        
         imu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
@@ -159,7 +159,7 @@ void QMI8658Sensor::getValueScaled()
         timestamp0 = timestamp1;
         timestamp1 = (localTime1 - alignmentOffset - syncLatencyMicros) +
             (++samplesSinceClockSync) * sampleDtMicros;
-        int32_t dtMicros = timestamp1 - timestamp0;
+        dtMicros = timestamp1 - timestamp0;
         
         constexpr float invPeriod = 1.0f / QMI8658_ODR_MICROS;
         int32_t sampleOffset = round((float)dtMicros * invPeriod) - 1;
@@ -193,10 +193,10 @@ void QMI8658Sensor::getValueScaled()
         Gxyz[1] = gyroCalibratedStatic[1];
         Gxyz[2] = gyroCalibratedStatic[2];
     }
-    vqf.updateGyr(Gxyz, (double)dtMicros * 1.0e-6);
-    Axyz[0] = 0;
-    Axyz[1] = 0;
-    Axyz[2] = 0;
+    // vqf.updateGyr(Gxyz, (double)dtMicros * 1.0e-6);
+    // Axyz[0] = 0;
+    // Axyz[1] = 0;
+    // Axyz[2] = 0;
 
     fusionUpdated = true;
     optimistic_yield(100);
@@ -297,10 +297,12 @@ void QMI8658Sensor::motionLoop()
     elapsed = now - lastRotationPacketSent;
     if (elapsed >= sendInterval) {
         lastRotationPacketSent = now - (elapsed - sendInterval);
-        if(accelDupCnt==255)
-            vqf.getQuat6D(q);
-        else
-            vqf.getQuat9D(q);
+        // Serial.printf("Elapsed:%d-A:%f/%f/%f-G:%f/%f/%f-M:%f/%f/%f\n",dtMicros,Axyz[0],Axyz[1],Axyz[2],Gxyz[0],Gxyz[1],Gxyz[2],Mxyz[0],Mxyz[1],Mxyz[2]);
+        mahonyQuaternionUpdate(q, Axyz[0], Axyz[1], Axyz[2], Gxyz[0], Gxyz[1], Gxyz[2], Mxyz[0], Mxyz[1], Mxyz[2], dtMicros * 1.0e-6);
+        // if(accelDupCnt==255)
+        //     vqf.getQuat6D(q);
+        // else
+        //     vqf.getQuat9D(q);
             
         if (isnan(q[0]) || isnan(q[1]) || isnan(q[2]) || isnan(q[3])) {
             q[0] = 1;
@@ -310,7 +312,7 @@ void QMI8658Sensor::motionLoop()
             return;
         }
         // // m_Logger.debug("A : %+6.0f %+6.0f %+6.0f / G : %+f %+f %+f / M: %+6.0f %+6.0f %+6.0f / Q : %+f %+f %+f %+f", Axyz[0], Axyz[1], Axyz[2], Gxyz[0], Gxyz[1], Gxyz[2], Mxyz[0],Mxyz[1], Mxyz[2], q[0], q[1], q[2], q[3]);
-        // mahonyQuaternionUpdate(q, Axyz[0], Axyz[1], Axyz[2], Gxyz[0], Gxyz[1], Gxyz[2], Mxyz[0], Mxyz[1], Mxyz[2], deltat * 1.0e-6);
+        
         // // if(!Kalman.bUpdate(Gxyz,Axyz,Mxyz)){
         // //     Serial.print("Vreset!");
         // //     float qi[4] = {1,0,0,0};

@@ -81,6 +81,7 @@ private:
     uint32_t sensorTime1 = 0;
     uint32_t localTime0 = 0;
     uint32_t localTime1 = 0;
+    int32_t dtMicros;
     double sensorTimeRatio = 1;
     double sensorTimeRatioEma = 1;
     double sampleDtMicros = 20000;
