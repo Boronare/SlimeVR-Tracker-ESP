@@ -31,7 +31,7 @@
 #include "../motionprocessing/RestDetection.h"
 // #include <ekf.h>
 
-#define CaliSamples 240
+#define CaliSamples 180
 #define GyroTolerance 250
 #define MagTolerance 250
 #define AccTolerance 30
@@ -43,10 +43,11 @@ constexpr float QMI8658_ODR_MICROS = QMI8658_MAP_ODR_MICROS(1.0f / QMI8658_ODR_H
 
 struct QMI8658VQFParams: VQFParams {
     QMI8658VQFParams() : VQFParams() {
+        magDistRejectionEnabled = true;
         tauAcc = 2.0f;
-        restMinT = 2.0f;
-        restThGyr = 0.6f; // 400 norm
-        restThAcc = 0.06f; // 100 norm
+        // restMinT = 2.0f;
+        // restThGyr = 0.6f; // 400 norm
+        // restThAcc = 0.06f; // 100 norm
     }
 };
 

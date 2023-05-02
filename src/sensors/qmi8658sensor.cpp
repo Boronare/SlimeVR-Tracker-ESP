@@ -67,8 +67,8 @@ void QMI8658Sensor::motionSetup()
         {
             m_Logger.debug("Starting calibration...");
             startCalibration(0);
-        }else{
-            accelDupCnt = 255;
+        // }else{
+        //     accelDupCnt = 255;
         }
 
         ledManager.off();
@@ -105,7 +105,7 @@ void QMI8658Sensor::getValueScaled()
     uint8_t i;
     int16_t ax, ay, az, gx, gy, gz, mx, my, mz;
     if(status&1&&status&2){
-        if(accelDupCnt!=255){
+        // if(accelDupCnt!=255){
             imu.getMagneto(&mx,&my,&mz);
             Mxyz[0] = (float)mx;
             Mxyz[1] = (float)my;
@@ -129,7 +129,7 @@ void QMI8658Sensor::getValueScaled()
                 prevM[2]=Mxyz[2];
                 vqf.updateMag(Mxyz);
             }
-        }
+        // }
        
         imu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
         Axyz[0] = (float)ax;
@@ -193,7 +193,7 @@ void QMI8658Sensor::getValueScaled()
         Gxyz[1] = gyroCalibratedStatic[1];
         Gxyz[2] = gyroCalibratedStatic[2];
     }
-    // vqf.updateGyr(Gxyz, (double)dtMicros * 1.0e-6);
+    vqf.updateGyr(Gxyz, (double)dtMicros * 1.0e-6);
     // Axyz[0] = 0;
     // Axyz[1] = 0;
     // Axyz[2] = 0;
@@ -298,11 +298,11 @@ void QMI8658Sensor::motionLoop()
     if (elapsed >= sendInterval) {
         lastRotationPacketSent = now - (elapsed - sendInterval);
         // Serial.printf("Elapsed:%d-A:%f/%f/%f-G:%f/%f/%f-M:%f/%f/%f\n",dtMicros,Axyz[0],Axyz[1],Axyz[2],Gxyz[0],Gxyz[1],Gxyz[2],Mxyz[0],Mxyz[1],Mxyz[2]);
-        mahonyQuaternionUpdate(q, Axyz[0], Axyz[1], Axyz[2], Gxyz[0], Gxyz[1], Gxyz[2], Mxyz[0], Mxyz[1], Mxyz[2], dtMicros * 1.0e-6);
+        // mahonyQuaternionUpdate(q, Axyz[0], Axyz[1], Axyz[2], Gxyz[0], Gxyz[1], Gxyz[2], Mxyz[0], Mxyz[1], Mxyz[2], dtMicros * 1.0e-6);
         // if(accelDupCnt==255)
         //     vqf.getQuat6D(q);
         // else
-        //     vqf.getQuat9D(q);
+        vqf.getQuat9D(q);
             
         if (isnan(q[0]) || isnan(q[1]) || isnan(q[2]) || isnan(q[3])) {
             q[0] = 1;
