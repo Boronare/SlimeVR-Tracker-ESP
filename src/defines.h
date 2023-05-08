@@ -26,7 +26,7 @@
 // ================================================
 
 // Set parameters of IMU and board used
-#define IMU IMU_QMI8658
+#define IMU IMU_BMI160
 #define SECOND_IMU IMU
 // #define BOARD BOARD_CUSTOM
 #define BOARD BOARD_SLIMEVR_LEGACY

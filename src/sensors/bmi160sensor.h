@@ -203,6 +203,8 @@ class BMI160Sensor : public Sensor {
         void getRemappedAcceleration(int16_t* x, int16_t* y, int16_t* z);
 
         bool getTemperature(float* out);
+        SlimeVR::Configuration::BMI160CalibrationConfig getMagAccCalibration(int16_t *Cx,int16_t *Cy,int16_t *Cz,int8_t *ignoreList=0);
+        bool verifyMagAccCali(SlimeVR::Configuration::BMI160CalibrationConfig cali,int16_t *Cx,int16_t *Cy,int16_t *Cz,int8_t *ignoreList);
     private:
         BMI160 imu {};
 
