@@ -364,7 +364,7 @@ void BMI160Sensor::motionLoop() {
 
     {
         uint32_t now = micros();
-        constexpr float maxSendRateHz = 2.0f;
+        constexpr float maxSendRateHz = 0.5f;
         constexpr uint32_t sendInterval = 1.0f/maxSendRateHz * 1e6;
         uint32_t elapsed = now - lastTemperaturePacketSent;
         if (elapsed >= sendInterval) {
@@ -816,7 +816,7 @@ void BMI160Sensor::startCalibration(int calibrationType) {
     // }
 }
 constexpr uint8_t CaliSamples=240;
-constexpr uint16_t GyroTolerance=20;
+constexpr uint16_t GyroTolerance=5;
 constexpr uint16_t AccTolerance=20;
 constexpr uint16_t MagTolerance=5;
 void BMI160Sensor::maybeCalibrateGyro() {
@@ -852,7 +852,7 @@ void BMI160Sensor::maybeCalibrateGyro() {
                 az += Cz[i] - m_Calibration.G_off[2];
             }
             getTemperature(&m_Calibration.temperature);
-            if (abs(ax) < (0.001 * CaliSamples/gscaleX) && abs(ay) <  0.001 * CaliSamples/gscaleY && abs(az) < 0.001 * CaliSamples/gscaleZ
+            if (abs(ax) < (0.00003 * CaliSamples/gscaleX) && abs(ay) <  0.00003 * CaliSamples/gscaleY && abs(az) < 0.00003 * CaliSamples/gscaleZ
                 && vx < sq(GyroTolerance) * (CaliSamples - 1) && vy < sq(GyroTolerance) * (CaliSamples - 1) && vz < sq(GyroTolerance) * (CaliSamples - 1)){
                     SlimeVR::Configuration::CalibrationConfig calibration;
                     calibration.type = SlimeVR::Configuration::CalibrationConfigType::BMI160;
@@ -960,7 +960,7 @@ void BMI160Sensor::maybeCalibrateAccel() {
         delay(10);
         imu.getMotion6(&ax,&ay,&az,&gx,&gy,&gz);
         if (abs(prevM[0] - ax) < AccTolerance && abs(prevM[1] - ay) < AccTolerance && abs(prevM[2] - az) < AccTolerance &&
-                abs(gx-m_Calibration.G_off[0]) < GyroTolerance && abs(gy-m_Calibration.G_off[1]) < GyroTolerance && abs(gz-m_Calibration.G_off[2]) < GyroTolerance)
+                abs(gx-m_Calibration.G_off[0]) < 100 && abs(gy-m_Calibration.G_off[1]) < 100 && abs(gz-m_Calibration.G_off[2]) < 100)
         {
             ledManager.off();
             if(accelDupCnt<=CaliSamples/12){
@@ -1004,7 +1004,7 @@ void BMI160Sensor::maybeCalibrateAccel() {
                 ledManager.on();
             }
         }
-        else if (abs(gx-m_Calibration.G_off[0]) > GyroTolerance*4 || abs(gy-m_Calibration.G_off[1]) > GyroTolerance*4 || abs(gz-m_Calibration.G_off[2]) > GyroTolerance*4){
+        else if (abs(gx-m_Calibration.G_off[0]) > 400 || abs(gy-m_Calibration.G_off[1]) > 400 || abs(gz-m_Calibration.G_off[2]) > 400){
             accelDupCnt = 0;
         }
         prevM[0] = ax;
