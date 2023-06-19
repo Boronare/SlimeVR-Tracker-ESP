@@ -82,12 +82,14 @@ void BMI160Sensor::initQMC(BMI160MagRate magRate) {
     delay(3);
 
     /* Configure QMC5883L Sensor */
+    imu.setMagRegister(0x1A, 50);
+    delay(3);
     imu.setMagRegister(0x1B, 0x20);
     delay(3);
-    imu.setMagRegister(0x1D, 0x1B);
+    imu.setMagRegister(0x1C, 0x00);
     delay(3);
-    imu.setMagRegister(0x1A, 50);
-    imu.setMagRegister(QMC_RA_CONTROL, QMC_CFG_MODE_CONTINUOUS | QMC_CFG_ODR_200HZ | QMC_CFG_RNG_8G | QMC_CFG_OSR_512);
+    imu.setMagRegister(0x1D, 0x10);
+    // imu.setMagRegister(QMC_RA_CONTROL, QMC_CFG_MODE_CONTINUOUS | QMC_CFG_ODR_200HZ | QMC_CFG_RNG_8G | QMC_CFG_OSR_512);
 
     imu.setRegister(BMI160_RA_MAG_IF_2_READ_RA, QMC_RA_DATA);
     imu.setRegister(BMI160_RA_MAG_CONF, magRate);
@@ -506,6 +508,7 @@ void BMI160Sensor::readFIFO() {
                 BMI160_FIFO_FRAME_ENSURE_BYTES_AVAILABLE(BMI160_FIFO_M_LEN);
                 #if !USE_6_AXIS
                     getMagnetometerXYZFromBuffer(&fifo.data[i], &mx, &my, &mz);
+                    Serial.printf("Mag: %d,%d,%d\n",mx,my,mz);
                     mnew = true;
                 #endif
                 i += BMI160_FIFO_M_LEN;
@@ -795,7 +798,7 @@ void BMI160Sensor::startCalibration(int calibrationType) {
 
     maybeCalibrateGyro();
     maybeCalibrateAccel();
-    // maybeCalibrateMag();
+    maybeCalibrateMag();
     
     // m_Logger.debug("Saving the calibration data");
 
@@ -816,9 +819,9 @@ void BMI160Sensor::startCalibration(int calibrationType) {
     // }
 }
 constexpr uint8_t CaliSamples=240;
-constexpr uint16_t GyroTolerance=5;
+constexpr uint16_t GyroTolerance=1;
 constexpr uint16_t AccTolerance=20;
-constexpr uint16_t MagTolerance=5;
+constexpr uint16_t MagTolerance=20;
 void BMI160Sensor::maybeCalibrateGyro() {
     uint8_t Cf = 0, Cr = CaliSamples;
     int16_t Cx[CaliSamples]{},Cy[CaliSamples]{},Cz[CaliSamples]{};
@@ -852,7 +855,7 @@ void BMI160Sensor::maybeCalibrateGyro() {
                 az += Cz[i] - m_Calibration.G_off[2];
             }
             getTemperature(&m_Calibration.temperature);
-            if (abs(ax) < (0.00003 * CaliSamples/gscaleX) && abs(ay) <  0.00003 * CaliSamples/gscaleY && abs(az) < 0.00003 * CaliSamples/gscaleZ
+            if (abs(ax) < (0.0003 * CaliSamples/gscaleX) && abs(ay) <  0.0003 * CaliSamples/gscaleY && abs(az) < 0.0003 * CaliSamples/gscaleZ
                 && vx < sq(GyroTolerance) * (CaliSamples - 1) && vy < sq(GyroTolerance) * (CaliSamples - 1) && vz < sq(GyroTolerance) * (CaliSamples - 1)){
                     SlimeVR::Configuration::CalibrationConfig calibration;
                     calibration.type = SlimeVR::Configuration::CalibrationConfigType::BMI160;
@@ -1291,9 +1294,9 @@ void BMI160Sensor::getMagnetometerXYZFromBuffer(uint8_t* data, int16_t* x, int16
     #elif BMI160_MAG_TYPE == BMI160_MAG_TYPE_QMC
         // qmc5883l -> 0 lsb 1 msb
         // XYZ order
-        *x = ((int16_t)data[1] << 8) | data[0];
-        *y = ((int16_t)data[3] << 8) | data[2];
-        *z = ((int16_t)data[5] << 8) | data[4];
+        *x = (((int32_t)data[0] << 8) | data[1]) -32768;
+        *y = (((int32_t)data[2] << 8) | data[3]) -32768;
+        *z = (((int32_t)data[4] << 8) | data[4]) -32768;
     #endif
 }
 

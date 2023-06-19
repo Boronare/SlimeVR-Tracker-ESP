@@ -2360,9 +2360,9 @@ void BMI160::getMagnetometer(int16_t* mx, int16_t* my, int16_t* mz) {
     // *mx = (((int16_t)buffer[1])  << 8) | buffer[0];
     // *my = (((int16_t)buffer[3])  << 8) | buffer[2];
     // *mz = (((int16_t)buffer[5])  << 8) | buffer[4];
-    *mx = ((int16_t)buffer[0] << 8) | buffer[1];
-    *mz = ((int16_t)buffer[2] << 8) | buffer[3];
-    *my = ((int16_t)buffer[4] << 8) | buffer[5];
+    *mx = (((int32_t)buffer[0] << 8) | buffer[1])-32768;
+    *my = (((int32_t)buffer[2] << 8) | buffer[3])-32768;
+    *mz = (((int32_t)buffer[4] << 8) | buffer[5])-32768;
 }
 
 void BMI160::getMagnetometerXYZBuffer(uint8_t* data) {

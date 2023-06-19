@@ -67,8 +67,8 @@ void QMI8658Sensor::motionSetup()
         {
             m_Logger.debug("Starting calibration...");
             startCalibration(0);
-        // }else{
-        //     accelDupCnt = 255;
+        }else{
+            accelDupCnt = 255;
         }
 
         ledManager.off();
@@ -132,6 +132,7 @@ void QMI8658Sensor::getValueScaled()
         // }
        
         imu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+        // Serial.printf("G:+%6d %+6d %+6d A:+%6d %+6d %+6d M:+%6d %+6d %+6d\n",gx,gy,gz,ax,ay,az,mx,my,mz);
         Axyz[0] = (float)ax;
         Axyz[1] = (float)ay;
         Axyz[2] = (float)az;
@@ -299,10 +300,11 @@ void QMI8658Sensor::motionLoop()
         lastRotationPacketSent = now - (elapsed - sendInterval);
         // Serial.printf("Elapsed:%d-A:%f/%f/%f-G:%f/%f/%f-M:%f/%f/%f\n",dtMicros,Axyz[0],Axyz[1],Axyz[2],Gxyz[0],Gxyz[1],Gxyz[2],Mxyz[0],Mxyz[1],Mxyz[2]);
         // mahonyQuaternionUpdate(q, Axyz[0], Axyz[1], Axyz[2], Gxyz[0], Gxyz[1], Gxyz[2], Mxyz[0], Mxyz[1], Mxyz[2], dtMicros * 1.0e-6);
-        // if(accelDupCnt==255)
-        //     vqf.getQuat6D(q);
-        // else
-        vqf.getQuat9D(q);
+        // mahonyQuaternionUpdate(q, Axyz[0], Axyz[1], Axyz[2], Gxyz[0], Gxyz[1], Gxyz[2], dtMicros * 1.0e-6);
+        if(accelDupCnt==255)
+            vqf.getQuat9D(q);
+        else
+        vqf.getQuat6D(q);
             
         if (isnan(q[0]) || isnan(q[1]) || isnan(q[2]) || isnan(q[3])) {
             q[0] = 1;
@@ -393,7 +395,7 @@ void QMI8658Sensor::CalibrateGyro(int16_t gx, int16_t gy, int16_t gz)
             az += Cz[i] - m_Calibration.G_off[2];
             m_Calibration.temperature = getTemperature();
         }
-        if (abs(ax) < (0.001 * CaliSamples/gscale) && abs(ay) <  0.001 * CaliSamples/gscale && abs(az) < 0.001 * CaliSamples/gscale
+        if (abs(ax) < (0.0003 * CaliSamples/gscale) && abs(ay) <  0.0003 * CaliSamples/gscale && abs(az) < 0.0003 * CaliSamples/gscale
             && vx < sq(GyroTolerance) * (CaliSamples - 1) && vy < sq(GyroTolerance) * (CaliSamples - 1) && vz < sq(GyroTolerance) * (CaliSamples - 1)){
                 SlimeVR::Configuration::CalibrationConfig calibration;
                 calibration.type = SlimeVR::Configuration::CalibrationConfigType::QMI8658;
@@ -480,7 +482,7 @@ void QMI8658Sensor::CalibrateMag(int16_t mx, int16_t my, int16_t mz){
 
 void QMI8658Sensor::CalibrateAcc(int16_t ax, int16_t ay, int16_t az, int16_t gx, int16_t gy, int16_t gz){
     if (abs(prevM[0] - ax) < AccTolerance && abs(prevM[1] - ay) < AccTolerance && abs(prevM[2] - az) < AccTolerance &&
-    abs(gx-m_Calibration.G_off[0]) < GyroTolerance && abs(gy-m_Calibration.G_off[1]) < GyroTolerance && abs(gz-m_Calibration.G_off[2]) < GyroTolerance)
+    abs(gx-m_Calibration.G_off[0]) < 200 && abs(gy-m_Calibration.G_off[1]) < 200 && abs(gz-m_Calibration.G_off[2]) < 200)
     {
         ledManager.off();
         if(accelDupCnt<=CaliSamples/12){
@@ -524,7 +526,7 @@ void QMI8658Sensor::CalibrateAcc(int16_t ax, int16_t ay, int16_t az, int16_t gx,
             ledManager.on();
         }
     }
-    else if (abs(gx-m_Calibration.G_off[0]) > GyroTolerance*4 || abs(gy-m_Calibration.G_off[1]) > GyroTolerance*4 || abs(gz-m_Calibration.G_off[2]) > GyroTolerance*4){
+    else if (abs(gx-m_Calibration.G_off[0]) > 800 || abs(gy-m_Calibration.G_off[1]) > 800 || abs(gz-m_Calibration.G_off[2]) > 800){
         accelDupCnt = 0;
     }
     prevM[0] = ax;

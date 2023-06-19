@@ -31,7 +31,6 @@
 #include "bmi160sensor.h"
 // #include "icm20948sensor.h"
 #include "qmi8658sensor.h"
-#include "icm42688sensor.h"
 #include "ErroneousSensor.h"
 #include "sensoraddresses.h"
 
