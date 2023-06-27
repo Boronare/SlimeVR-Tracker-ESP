@@ -59,8 +59,8 @@ void QMI8658Sensor::motionSetup()
     imu.getAcceleration(&ax, &ay, &az);
     float g_az = (float)az / ACCEL_SENSITIVITY_8G;
     if(g_az < -0.75f) {
-        ledManager.pattern(500,500,5);
         m_Logger.info("Flip front to confirm start calibration");
+        ledManager.pattern(500,500,5);
         imu.getAcceleration(&ax, &ay, &az);
         g_az = (float)az / ACCEL_SENSITIVITY_8G;
         if(g_az > 0.75f)
@@ -101,108 +101,112 @@ void QMI8658Sensor::motionSetup()
 }
 void QMI8658Sensor::getValueScaled()
 {
-    uint8_t status = imu.getStatus0();
-    uint8_t i;
-    int16_t ax, ay, az, gx, gy, gz, mx, my, mz;
-    if(status&1&&status&2){
-        // if(accelDupCnt!=255){
-            imu.getMagneto(&mx,&my,&mz);
-            Mxyz[0] = (float)mx;
-            Mxyz[1] = (float)my;
-            Mxyz[2] = (float)mz;
-            #if useFullCalibrationMatrix == true
-                for (i = 0; i < 3; i++)
-                    temp[i] = (Mxyz[i] - m_Calibration.M_B[i]);
-                Mxyz[0] = m_Calibration.M_Ainv[0][0] * temp[0] + m_Calibration.M_Ainv[0][1] * temp[1] + m_Calibration.M_Ainv[0][2] * temp[2];
-                Mxyz[1] = m_Calibration.M_Ainv[1][0] * temp[0] + m_Calibration.M_Ainv[1][1] * temp[1] + m_Calibration.M_Ainv[1][2] * temp[2];
-                Mxyz[2] = m_Calibration.M_Ainv[2][0] * temp[0] + m_Calibration.M_Ainv[2][1] * temp[1] + m_Calibration.M_Ainv[2][2] * temp[2];
-            #else
-                for (i = 0; i < 3; i++)
-                    Mxyz[i] = (Mxyz[i] - m_Calibration.M_B[i]);
-            #endif
-            if( prevM[0]==Mxyz[0] && prevM[1] == Mxyz[1] && prevM[2] == Mxyz[2] ){
-                Mxyz[0]=Mxyz[1]=Mxyz[2]=0.0f;
-            }
-            else{
-                prevM[0]=Mxyz[0];
-                prevM[1]=Mxyz[1];
-                prevM[2]=Mxyz[2];
-                vqf.updateMag(Mxyz);
-            }
-        // }
-       
-        imu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
-        // Serial.printf("G:+%6d %+6d %+6d A:+%6d %+6d %+6d M:+%6d %+6d %+6d\n",gx,gy,gz,ax,ay,az,mx,my,mz);
-        Axyz[0] = (float)ax;
-        Axyz[1] = (float)ay;
-        Axyz[2] = (float)az;
-        #if useFullCalibrationMatrix == true
-            for (uint8_t i = 0; i < 3; i++)
-                temp[i] = (Axyz[i] - m_Calibration.A_B[i])/ACCEL_SENSITIVITY_8G;
-            Axyz[0] = m_Calibration.A_Ainv[0][0] * temp[0] + m_Calibration.A_Ainv[0][1] * temp[1] + m_Calibration.A_Ainv[0][2] * temp[2];
-            Axyz[1] = m_Calibration.A_Ainv[1][0] * temp[0] + m_Calibration.A_Ainv[1][1] * temp[1] + m_Calibration.A_Ainv[1][2] * temp[2];
-            Axyz[2] = m_Calibration.A_Ainv[2][0] * temp[0] + m_Calibration.A_Ainv[2][1] * temp[1] + m_Calibration.A_Ainv[2][2] * temp[2];
-        #else
-            for (uint8_t i = 0; i < 3; i++)
-                Axyz[i] = (Axyz[i] - m_Calibration.A_B[i])/ACCEL_SENSITIVITY_8G;
-        #endif
-        lastAxyz[0] = Axyz[0];
-        lastAxyz[1] = Axyz[1];
-        lastAxyz[2] = Axyz[2];
-        #if BMI160_USE_VQF
-            vqf.updateAcc(Axyz);
-        #endif
-        optimistic_yield(100);
-        constexpr uint32_t alignmentBitmask = ~(0xFFFFFFFF << (16 - 6));
-        uint32_t alignmentOffset =
-            (sensorTime1 & alignmentBitmask) * QMI8658_TIMESTAMP_RESOLUTION_MICROS * sensorTimeRatioEma;
-
-        timestamp0 = timestamp1;
-        timestamp1 = (localTime1 - alignmentOffset - syncLatencyMicros) +
-            (++samplesSinceClockSync) * sampleDtMicros;
-        dtMicros = timestamp1 - timestamp0;
-        
-        constexpr float invPeriod = 1.0f / QMI8658_ODR_MICROS;
-        int32_t sampleOffset = round((float)dtMicros * invPeriod) - 1;
-        if (abs(sampleOffset) > 3) {
-            dtMicros = sampleDtMicros;
-        } else if (sampleOffset != 0) {
-            dtMicros -= sampleOffset * sampleDtMicros;
-        }
-    #if BMI160_USE_TEMPCAL
-        bool restDetected = false;
-            restDetected = vqf.getRestDetected();
-        gyroTempCalibrator->updateGyroTemperatureCalibration(temperature, restDetected, gx, gy, gz);
-    #endif
-
-    sensor_real_t gyroCalibratedStatic[3];
-    gyroCalibratedStatic[0] = (sensor_real_t)((((double)gx - m_Calibration.G_off[0]) * gscale));
-    gyroCalibratedStatic[1] = (sensor_real_t)((((double)gy - m_Calibration.G_off[1]) * gscale));
-    gyroCalibratedStatic[2] = (sensor_real_t)((((double)gz - m_Calibration.G_off[2]) * gscale));
-
-    #if BMI160_USE_TEMPCAL
-    float GOxyz[3];
-    if (gyroTempCalibrator->approximateOffset(temperature, GOxyz)) {
-        Gxyz[0] = (sensor_real_t)((((double)gx - GOxyz[0] - GOxyzStaticTempCompensated[0]) * gscale));
-        Gxyz[1] = (sensor_real_t)((((double)gy - GOxyz[1] - GOxyzStaticTempCompensated[1]) * gscale));
-        Gxyz[2] = (sensor_real_t)((((double)gz - GOxyz[2] - GOxyzStaticTempCompensated[2]) * gscale));
-    }
+    uint8_t buffer[1536];
+    uint16_t fifoCnt;
+    
+    if(!imu.isAlive()) imu.initialize(addr, 0x2C+sensorId);
     else
-    #endif
-    {
-        Gxyz[0] = gyroCalibratedStatic[0];
-        Gxyz[1] = gyroCalibratedStatic[1];
-        Gxyz[2] = gyroCalibratedStatic[2];
-    }
-    vqf.updateGyr(Gxyz, (double)dtMicros * 1.0e-6);
-    // Axyz[0] = 0;
-    // Axyz[1] = 0;
-    // Axyz[2] = 0;
+    while(1){
+    // uint8_t status = imu.getStatus0();
+    uint8_t i;
+    uint8_t fifoStatus;
+    int16_t ax, ay, az, gx, gy, gz, mx, my, mz;
+            fifoCnt = imu.getFIFOCount();
+            imu.getFIFOBytes(buffer,fifoCnt);
+            // Serial.printf("Status : %x Cnt : %d\n",fifoStatus, fifoCnt);
+            for(i=0;i<fifoCnt/12;i++){
+                ax = buffer[i*12+0]|buffer[i*12+1]<<8;
+                ay = buffer[i*12+2]|buffer[i*12+3]<<8;
+                az = buffer[i*12+4]|buffer[i*12+5]<<8;
+                gx = buffer[i*12+6]|buffer[i*12+7]<<8;
+                gy = buffer[i*12+8]|buffer[i*12+9]<<8;
+                gz = buffer[i*12+10]|buffer[i*12+11]<<8;
+                // Serial.printf("i:%d G:%+6d %+6d %+6d A:%+6d %+6d %+6d\n",i,gx,gy,gz,ax,ay,az);
 
-    fusionUpdated = true;
-    optimistic_yield(100);
-    }else{
-        if(!imu.isAlive()) imu.initialize(addr, 0x2C+sensorId);
+                
+            Axyz[0] = (float)ax;
+            Axyz[1] = (float)ay;
+            Axyz[2] = (float)az;
+            #if useFullCalibrationMatrix == true
+                for (uint8_t i = 0; i < 3; i++)
+                    temp[i] = (Axyz[i] - m_Calibration.A_B[i])/ACCEL_SENSITIVITY_8G;
+                Axyz[0] = m_Calibration.A_Ainv[0][0] * temp[0] + m_Calibration.A_Ainv[0][1] * temp[1] + m_Calibration.A_Ainv[0][2] * temp[2];
+                Axyz[1] = m_Calibration.A_Ainv[1][0] * temp[0] + m_Calibration.A_Ainv[1][1] * temp[1] + m_Calibration.A_Ainv[1][2] * temp[2];
+                Axyz[2] = m_Calibration.A_Ainv[2][0] * temp[0] + m_Calibration.A_Ainv[2][1] * temp[1] + m_Calibration.A_Ainv[2][2] * temp[2];
+            #else
+                for (uint8_t i = 0; i < 3; i++)
+                    Axyz[i] = (Axyz[i] - m_Calibration.A_B[i])/ACCEL_SENSITIVITY_8G;
+            #endif
+            lastAxyz[0] = Axyz[0];
+            lastAxyz[1] = Axyz[1];
+            lastAxyz[2] = Axyz[2];
+            #if BMI160_USE_VQF
+                vqf.updateAcc(Axyz);
+            #endif
+            optimistic_yield(100);
+            
+            constexpr float invPeriod = 1.0f / QMI8658_ODR_MICROS;
+        #if BMI160_USE_TEMPCAL
+            bool restDetected = false;
+                restDetected = vqf.getRestDetected();
+            gyroTempCalibrator->updateGyroTemperatureCalibration(temperature, restDetected, gx, gy, gz);
+        #endif
+
+        sensor_real_t gyroCalibratedStatic[3];
+        gyroCalibratedStatic[0] = (sensor_real_t)((((double)gx - m_Calibration.G_off[0]) * gscale));
+        gyroCalibratedStatic[1] = (sensor_real_t)((((double)gy - m_Calibration.G_off[1]) * gscale));
+        gyroCalibratedStatic[2] = (sensor_real_t)((((double)gz - m_Calibration.G_off[2]) * gscale));
+
+        #if BMI160_USE_TEMPCAL
+        float GOxyz[3];
+        if (gyroTempCalibrator->approximateOffset(temperature, GOxyz)) {
+            Gxyz[0] = (sensor_real_t)((((double)gx - GOxyz[0] - GOxyzStaticTempCompensated[0]) * gscale));
+            Gxyz[1] = (sensor_real_t)((((double)gy - GOxyz[1] - GOxyzStaticTempCompensated[1]) * gscale));
+            Gxyz[2] = (sensor_real_t)((((double)gz - GOxyz[2] - GOxyzStaticTempCompensated[2]) * gscale));
+        }
+        else
+        #endif
+        {
+            Gxyz[0] = gyroCalibratedStatic[0];
+            Gxyz[1] = gyroCalibratedStatic[1];
+            Gxyz[2] = gyroCalibratedStatic[2];
+        }
+        // Serial.printf("Gxyz : %f %f %f\n",Gxyz[0],Gxyz[1],Gxyz[2]);
+        vqf.updateGyr(Gxyz, (double)QMI8658_ODR_MICROS * 1.0e-6);
+        // Axyz[0] = 0;
+        // Axyz[1] = 0;
+        // Axyz[2] = 0;
+
+        fusionUpdated = true;
+            }
+            if(accelDupCnt==255){
+                imu.getMagneto(&mx,&my,&mz);
+                Mxyz[0] = (float)mx;
+                Mxyz[1] = (float)my;
+                Mxyz[2] = (float)mz;
+                #if useFullCalibrationMatrix == true
+                    for (i = 0; i < 3; i++)
+                        temp[i] = (Mxyz[i] - m_Calibration.M_B[i]);
+                    Mxyz[0] = m_Calibration.M_Ainv[0][0] * temp[0] + m_Calibration.M_Ainv[0][1] * temp[1] + m_Calibration.M_Ainv[0][2] * temp[2];
+                    Mxyz[1] = m_Calibration.M_Ainv[1][0] * temp[0] + m_Calibration.M_Ainv[1][1] * temp[1] + m_Calibration.M_Ainv[1][2] * temp[2];
+                    Mxyz[2] = m_Calibration.M_Ainv[2][0] * temp[0] + m_Calibration.M_Ainv[2][1] * temp[1] + m_Calibration.M_Ainv[2][2] * temp[2];
+                #else
+                    for (i = 0; i < 3; i++)
+                        Mxyz[i] = (Mxyz[i] - m_Calibration.M_B[i]);
+                #endif
+                if( prevM[0]==Mxyz[0] && prevM[1] == Mxyz[1] && prevM[2] == Mxyz[2] ){
+                    Mxyz[0]=Mxyz[1]=Mxyz[2]=0.0f;
+                }
+                else{
+                    prevM[0]=Mxyz[0];
+                    prevM[1]=Mxyz[1];
+                    prevM[2]=Mxyz[2];
+                    vqf.updateMag(Mxyz);
+                }
+            }
+            imu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+        optimistic_yield(100);
+        break;
     }
 //     // AutoCalibrateGyro(gx,gy,gz,mx,my,mz);
 //     // Serial.printf("A : %+6d %+6d %+6d / G: %+6d %+6d %+6d / M:%+6d %+6d %+6d\n",ax,ay,az,gx,gy,gz,mx,my,mz);
@@ -242,7 +246,7 @@ void QMI8658Sensor::motionLoop()
                     sensorTime1 - sensorTime0 :
                     (sensorTime1 + 0xFFFFFF) - sensorTime0;
                 double localDt = localTime1 - localTime0;
-                const double nextSensorTimeRatio = localDt / (remoteDt * QMI8658_TIMESTAMP_RESOLUTION_MICROS);
+                const double nextSensorTimeRatio = localDt / remoteDt;
                 
                 // handle sdk lags and time travel
                 if (round(nextSensorTimeRatio) == 1.0) {
@@ -520,7 +524,6 @@ void QMI8658Sensor::CalibrateAcc(int16_t ax, int16_t ay, int16_t az, int16_t gx,
                 if (Cr >= CaliSamples)
                     Cr -= CaliSamples;
             }
-            delay(10);
         }
         else{
             ledManager.on();
@@ -630,11 +633,12 @@ void QMI8658Sensor::startCalibration(int calibrationType) {
     }
     m_Logger.debug("Gathering accelerometer data...");
     Cf=0; Cr=CaliSamples-1;
+    accelDupCnt = 0;
     while(Cf!=Cr){
         int16_t ax,ay,az,gx,gy,gz;
         imu.getMotion6(&ax,&ay,&az,&gx,&gy,&gz);
         CalibrateAcc(ax,ay,az,gx,gy,gz);
-        delay(10);
+        delay(50);
     }
     Cf=0; Cr=CaliSamples-1;
     while(Cf!=Cr){

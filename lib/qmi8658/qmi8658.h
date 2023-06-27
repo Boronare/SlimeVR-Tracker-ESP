@@ -464,8 +464,7 @@ public:
     bool getSensorTime(uint32_t *time);
     int16_t getTemperature();
 
-    bool getFIFOHeaderModeEnabled();
-    void setFIFOHeaderModeEnabled(bool enabled);
+    int8_t getFIFOStatus();
     void resetFIFO();
 
     uint16_t getFIFOCount();

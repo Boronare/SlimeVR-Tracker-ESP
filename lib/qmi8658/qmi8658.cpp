@@ -146,3 +146,22 @@ bool QMI8658::testConnection()
 {
     return (QMI8658_CHIP_ID == getDeviceID());
 }
+
+uint16_t QMI8658::getFIFOCount()
+{
+    I2Cdev::readBytes(devAddr, QMI8658_FIFO_SMPL_CNT, 2, buffer);
+    uint16_t cnt = 2*(buffer[0]+256*(buffer[1]&0b00000011));
+    if(!cnt) I2Cdev::writeByte(devAddr, QMI8658_RA_FIFO_CTRL, 0b00001110);
+    return cnt;
+}
+
+void QMI8658::getFIFOBytes(uint8_t *data, uint16_t length){
+    I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL9, 0x05);
+    delay(2);
+    I2Cdev::readBytes(devAddr, QMI8658_RA_FIFO_DATA, length,data);
+    I2Cdev::writeByte(devAddr, QMI8658_RA_FIFO_CTRL, 0b00001110);
+}
+int8_t QMI8658::getFIFOStatus(){
+    I2Cdev::readByte(devAddr, QMI8658_RA_FIFO_STATUS, buffer);
+    return buffer[0];
+}
