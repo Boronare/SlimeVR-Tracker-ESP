@@ -22,7 +22,6 @@
 */
 
 #include "serialcommands.h"
-#include "network/network.h"
 #include "logging/Logger.h"
 #include <CmdCallback.hpp>
 #include "GlobalVars.h"
@@ -71,14 +70,14 @@ namespace SerialCommands {
         logger.info(
             "Sensor 1: %s (%.3f %.3f %.3f %.3f) is working: %s, had data: %s",
             getIMUNameByType(sensor1->getSensorType()),
-            UNPACK_QUATERNION(sensor1->getQuaternion()),
+            UNPACK_QUATERNION(sensor1->getFusedRotation()),
             sensor1->isWorking() ? "true" : "false",
             sensor1->hadData ? "true" : "false"
         );
         logger.info(
             "Sensor 2: %s (%.3f %.3f %.3f %.3f) is working: %s, had data: %s",
             getIMUNameByType(sensor2->getSensorType()),
-            UNPACK_QUATERNION(sensor2->getQuaternion()),
+            UNPACK_QUATERNION(sensor2->getFusedRotation()),
             sensor2->isWorking() ? "true" : "false",
             sensor2->hadData ? "true" : "false"
         );
@@ -88,14 +87,14 @@ namespace SerialCommands {
         if (parser->getParamCount() < 2) {
             return;
         }
-        
+
         if (parser->equalCmdParam(1, "INFO")) {
             printState();
         }
 
         if (parser->equalCmdParam(1, "CONFIG")) {
             String str =
-                "BOARD=%d\n" 
+                "BOARD=%d\n"
                 "IMU=%d\n"
                 "SECOND_IMU=%d\n"
                 "IMU_ROTATION=%f\n"
@@ -150,7 +149,7 @@ namespace SerialCommands {
             logger.info(
                 "[TEST] Sensor 1: %s (%.3f %.3f %.3f %.3f) is working: %s, had data: %s",
                 getIMUNameByType(sensor1->getSensorType()),
-                UNPACK_QUATERNION(sensor1->getQuaternion()),
+                UNPACK_QUATERNION(sensor1->getFusedRotation()),
                 sensor1->isWorking() ? "true" : "false",
                 sensor1->hadData ? "true" : "false"
             );
@@ -220,7 +219,7 @@ namespace SerialCommands {
         logger.info("Note:");
         logger.info("  Temperature calibration config saves automatically when calibration percent is at 100%");
     }
-    
+
     void setUp() {
         cmdCallbacks.addCmd("SET", &cmdSet);
         cmdCallbacks.addCmd("GET", &cmdGet);

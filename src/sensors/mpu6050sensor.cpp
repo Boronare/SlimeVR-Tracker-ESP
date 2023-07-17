@@ -30,7 +30,6 @@
 #endif
 
 #include "mpu6050sensor.h"
-#include "network/network.h"
 #include <i2cscan.h>
 #include "calibration.h"
 #include "GlobalVars.h"
@@ -127,7 +126,7 @@ void MPU6050Sensor::motionLoop()
         imu.getRotation(&rX, &rY, &rZ);
         imu.getAcceleration(&aX, &aY, &aZ);
 
-        Network::sendInspectionRawIMUData(sensorId, rX, rY, rZ, 255, aX, aY, aZ, 255, 0, 0, 0, 255);
+        networkConnection.sendInspectionRawIMUData(sensorId, rX, rY, rZ, 255, aX, aY, aZ, 255, 0, 0, 0, 255);
     }
 #endif
 
@@ -137,8 +136,8 @@ void MPU6050Sensor::motionLoop()
     if (imu.dmpGetCurrentFIFOPacket(fifoBuffer))
     {
         imu.dmpGetQuaternion(&rawQuat, fifoBuffer);
-        quaternion.set(-rawQuat.y, rawQuat.x, rawQuat.z, rawQuat.w);
-        quaternion *= sensorOffset;
+        fusedRotation.set(-rawQuat.y, rawQuat.x, rawQuat.z, rawQuat.w);
+        fusedRotation *= sensorOffset;
 
     #if SEND_ACCELERATION
         {
@@ -156,22 +155,17 @@ void MPU6050Sensor::motionLoop()
             this->imu.dmpGetLinearAccel(&this->rawAccel, &this->rawAccel, &gravity);
 
             // convert acceleration to m/s^2 (implicitly casts to float)
-            this->linearAcceleration[0] = this->rawAccel.x * ASCALE_2G;
-            this->linearAcceleration[1] = this->rawAccel.y * ASCALE_2G;
-            this->linearAcceleration[2] = this->rawAccel.z * ASCALE_2G;
+            this->acceleration[0] = this->rawAccel.x * ASCALE_2G;
+            this->acceleration[1] = this->rawAccel.y * ASCALE_2G;
+            this->acceleration[2] = this->rawAccel.z * ASCALE_2G;
+            this->newAcceleration = true;
         }
     #endif
-        
-#if ENABLE_INSPECTION
-        {
-            Network::sendInspectionFusedIMUData(sensorId, quaternion);
-        }
-#endif
 
-        if (!OPTIMIZE_UPDATES || !lastQuatSent.equalsWithEpsilon(quaternion))
+        if (!OPTIMIZE_UPDATES || !lastFusedRotationSent.equalsWithEpsilon(fusedRotation))
         {
-            newData = true;
-            lastQuatSent = quaternion;
+            newFusedRotation = true;
+            lastFusedRotationSent = fusedRotation;
         }
     }
 }
@@ -181,17 +175,6 @@ void MPU6050Sensor::startCalibration(int calibrationType) {
 
 #ifdef IMU_MPU6050_RUNTIME_CALIBRATION
     m_Logger.info("MPU is using automatic runtime calibration. Place down the device and it should automatically calibrate after a few seconds");
-
-    // Lie to the server and say we've calibrated
-    switch (calibrationType)
-    {
-    case CALIBRATION_TYPE_INTERNAL_ACCEL:
-        Network::sendCalibrationFinished(CALIBRATION_TYPE_INTERNAL_ACCEL, 0);
-        break;
-    case CALIBRATION_TYPE_INTERNAL_GYRO:
-        Network::sendCalibrationFinished(CALIBRATION_TYPE_INTERNAL_GYRO, 0);//was CALIBRATION_TYPE_INTERNAL_GYRO for some reason? there wasn't a point to this switch
-        break;
-    }
 #else //!IMU_MPU6050_RUNTIME_CALIBRATION
     m_Logger.info("Put down the device and wait for baseline gyro reading calibration");
     delay(2000);
@@ -207,14 +190,12 @@ void MPU6050Sensor::startCalibration(int calibrationType) {
     {
     case CALIBRATION_TYPE_INTERNAL_ACCEL:
         imu.CalibrateAccel(10);
-        Network::sendCalibrationFinished(CALIBRATION_TYPE_INTERNAL_ACCEL, 0);//doesn't send calibration data anymore, has that been depricated in server?
         m_Calibration.A_B[0] = imu.getXAccelOffset();
         m_Calibration.A_B[1] = imu.getYAccelOffset();
         m_Calibration.A_B[2] = imu.getZAccelOffset();
         break;
     case CALIBRATION_TYPE_INTERNAL_GYRO:
         imu.CalibrateGyro(10);
-        Network::sendCalibrationFinished(CALIBRATION_TYPE_INTERNAL_GYRO, 0);//doesn't send calibration data anymore
         m_Calibration.G_off[0] = imu.getXGyroOffset();
         m_Calibration.G_off[1] = imu.getYGyroOffset();
         m_Calibration.G_off[2] = imu.getZGyroOffset();

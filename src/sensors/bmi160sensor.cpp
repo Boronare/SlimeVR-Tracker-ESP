@@ -76,20 +76,15 @@ void BMI160Sensor::initQMC(BMI160MagRate magRate) {
     imu.setRegister(BMI160_RA_IF_CONF, BMI160_IF_CONF_MODE_PRI_AUTO_SEC_MAG);
     delay(1);
 
-    imu.setMagDeviceAddress(0x30);
+    imu.setMagDeviceAddress(QMC_DEVADDR);
     delay(3);
     imu.setRegister(BMI160_RA_MAG_IF_1_MODE, BMI160_MAG_SETUP_MODE);
     delay(3);
 
     /* Configure QMC5883L Sensor */
-    imu.setMagRegister(0x1A, 50);
+    imu.setMagRegister(QMC_RA_RESET, 1);
     delay(3);
-    imu.setMagRegister(0x1B, 0x20);
-    delay(3);
-    imu.setMagRegister(0x1C, 0x00);
-    delay(3);
-    imu.setMagRegister(0x1D, 0x10);
-    // imu.setMagRegister(QMC_RA_CONTROL, QMC_CFG_MODE_CONTINUOUS | QMC_CFG_ODR_200HZ | QMC_CFG_RNG_8G | QMC_CFG_OSR_512);
+    imu.setMagRegister(QMC_RA_CONTROL, QMC_CFG_MODE_CONTINUOUS | QMC_CFG_ODR_200HZ | QMC_CFG_RNG_8G | QMC_CFG_OSR_512);
 
     imu.setRegister(BMI160_RA_MAG_IF_2_READ_RA, QMC_RA_DATA);
     imu.setRegister(BMI160_RA_MAG_CONF, magRate);
@@ -153,7 +148,7 @@ void BMI160Sensor::motionSetup() {
         ledManager.on();
 
         m_Logger.info("Flip front to confirm start calibration");
-        ledManager.pattern(500,500,5);
+        delay(5000);
         getRemappedAcceleration(&ax, &ay, &az);
         g_az = (float)az / BMI160_ACCEL_TYPICAL_SENSITIVITY_LSB;
         if (g_az > 0.75f) {
@@ -366,7 +361,7 @@ void BMI160Sensor::motionLoop() {
 
     {
         uint32_t now = micros();
-        constexpr float maxSendRateHz = 0.5f;
+        constexpr float maxSendRateHz = 2.0f;
         constexpr uint32_t sendInterval = 1.0f/maxSendRateHz * 1e6;
         uint32_t elapsed = now - lastTemperaturePacketSent;
         if (elapsed >= sendInterval) {
@@ -508,7 +503,6 @@ void BMI160Sensor::readFIFO() {
                 BMI160_FIFO_FRAME_ENSURE_BYTES_AVAILABLE(BMI160_FIFO_M_LEN);
                 #if !USE_6_AXIS
                     getMagnetometerXYZFromBuffer(&fifo.data[i], &mx, &my, &mz);
-                    Serial.printf("Mag: %d,%d,%d\n",mx,my,mz);
                     mnew = true;
                 #endif
                 i += BMI160_FIFO_M_LEN;
@@ -738,7 +732,7 @@ void BMI160Sensor::applyAccelCalibrationAndScale(sensor_real_t Axyz[3]) {
             Axyz[2] = m_Calibration.A_Ainv[2][0] * tmp[0] + m_Calibration.A_Ainv[2][1] * tmp[1] + m_Calibration.A_Ainv[2][2] * tmp[2];
         #else
             for (uint8_t i = 0; i < 3; i++)
-                Axyz[i] = (Axyz[i] - m_Calibration.A_B[i]);
+                Axyz[i] = (Axyz[i] - calibration->A_B[i]);
         #endif
     }
     Axyz[0] *= BMI160_ASCALE;
@@ -757,7 +751,7 @@ void BMI160Sensor::applyMagCalibrationAndScale(sensor_real_t Mxyz[3]) {
             Mxyz[1] = m_Calibration.M_Ainv[1][0] * temp[0] + m_Calibration.M_Ainv[1][1] * temp[1] + m_Calibration.M_Ainv[1][2] * temp[2];
             Mxyz[2] = m_Calibration.M_Ainv[2][0] * temp[0] + m_Calibration.M_Ainv[2][1] * temp[1] + m_Calibration.M_Ainv[2][2] * temp[2];
         #else
-            for (uint8_t i = 0; i < 3; i++)
+            for (i = 0; i < 3; i++)
                 Mxyz[i] = (Mxyz[i] - m_Calibration.M_B[i]);
         #endif
     #endif
@@ -800,460 +794,281 @@ void BMI160Sensor::startCalibration(int calibrationType) {
     maybeCalibrateAccel();
     maybeCalibrateMag();
     
-    // m_Logger.debug("Saving the calibration data");
+    m_Logger.debug("Saving the calibration data");
 
-    // SlimeVR::Configuration::CalibrationConfig calibration;
-    // calibration.type = SlimeVR::Configuration::CalibrationConfigType::BMI160;
-    // calibration.data.bmi160 = m_Calibration;
-    // configuration.setCalibration(sensorId, calibration);
-    // configuration.save();
+    SlimeVR::Configuration::CalibrationConfig calibration;
+    calibration.type = SlimeVR::Configuration::CalibrationConfigType::BMI160;
+    calibration.data.bmi160 = m_Calibration;
+    configuration.setCalibration(sensorId, calibration);
+    configuration.save();
 
-    // m_Logger.debug("Saved the calibration data");
+    m_Logger.debug("Saved the calibration data");
 
-    // m_Logger.info("Calibration data gathered, exiting calibration mode in...");
-    // constexpr uint8_t POST_CALIBRATION_DELAY_SEC = 3;
-    // ledManager.on();
-    // for (uint8_t i = POST_CALIBRATION_DELAY_SEC; i > 0; i--) {
-    //     m_Logger.info("%i...", i);
-    //     delay(1000);
-    // }
-}
-constexpr uint8_t CaliSamples=240;
-constexpr uint16_t GyroTolerance=1;
-constexpr uint16_t AccTolerance=20;
-constexpr uint16_t MagTolerance=20;
-void BMI160Sensor::maybeCalibrateGyro() {
-    uint8_t Cf = 0, Cr = CaliSamples;
-    int16_t Cx[CaliSamples]{},Cy[CaliSamples]{},Cz[CaliSamples]{};
-    while (Cf!=Cr){
-        int16_t gx,gy,gz;
-        delay(10);
-        imu.getRotation(&gx,&gy,&gz);
-        Cx[Cf] = gx;
-        Cy[Cf] = gy;
-        Cz[Cf] = gz;
-        Cf++;
-        if (Cf == Cr)
-        {
-            // m_Logger.debug("Gyro Samples Collected : X: %f Y:%f Z:%f",Gbias[0],Gbias[1],Gbias[2]);
-            /**
-             * Variance and Average
-             */
-            float vx = 0.0;
-            float vy = 0.0;
-            float vz = 0.0;
-            float ax = 0.0;
-            float ay = 0.0;
-            float az = 0.0;
-            for (uint8_t i = 0; i < CaliSamples; i++)
-            {
-                vx += sq(Cx[i] - m_Calibration.G_off[0]);
-                vy += sq(Cy[i] - m_Calibration.G_off[1]);
-                vz += sq(Cz[i] - m_Calibration.G_off[2]);
-                ax += Cx[i] - m_Calibration.G_off[0];
-                ay += Cy[i] - m_Calibration.G_off[1];
-                az += Cz[i] - m_Calibration.G_off[2];
-            }
-            getTemperature(&m_Calibration.temperature);
-            if (abs(ax) < (0.0003 * CaliSamples/gscaleX) && abs(ay) <  0.0003 * CaliSamples/gscaleY && abs(az) < 0.0003 * CaliSamples/gscaleZ
-                && vx < sq(GyroTolerance) * (CaliSamples - 1) && vy < sq(GyroTolerance) * (CaliSamples - 1) && vz < sq(GyroTolerance) * (CaliSamples - 1)){
-                    SlimeVR::Configuration::CalibrationConfig calibration;
-                    calibration.type = SlimeVR::Configuration::CalibrationConfigType::BMI160;
-                    calibration.data.bmi160 = m_Calibration;
-                    configuration.setCalibration(sensorId, calibration);
-                    configuration.save(sensorId);
-                    return;
-                }
-            vx = 0.0;
-            vy = 0.0;
-            vz = 0.0;
-            for (uint8_t i = 0; i < CaliSamples; i++)
-            {
-                vx += sq(Cx[i] - m_Calibration.G_off[0] - ax/CaliSamples);
-                vy += sq(Cy[i] - m_Calibration.G_off[1] - ay/CaliSamples);
-                vz += sq(Cz[i] - m_Calibration.G_off[2] - az/CaliSamples);
-            }
-            //Update bias if Gyro for each axis is stable.
-            if(vx < sq(GyroTolerance) * (CaliSamples - 1)){
-                m_Calibration.G_off[0] += ax/CaliSamples;
-            }
-            if(vy < sq(GyroTolerance) * (CaliSamples - 1)){
-                m_Calibration.G_off[1] += ay/CaliSamples;
-            }
-            if(vz < sq(GyroTolerance) * (CaliSamples - 1)){
-                m_Calibration.G_off[2] += az/CaliSamples;
-            }
-            // Prepare for next gyro calibration.
-            Cr += CaliSamples / 4;
-            if (Cr > CaliSamples)
-            {
-                Cf -= CaliSamples;
-                Cr -= CaliSamples;
-            }
-        }
+    m_Logger.info("Calibration data gathered, exiting calibration mode in...");
+    constexpr uint8_t POST_CALIBRATION_DELAY_SEC = 3;
+    ledManager.on();
+    for (uint8_t i = POST_CALIBRATION_DELAY_SEC; i > 0; i--) {
+        m_Logger.info("%i...", i);
+        delay(1000);
     }
-    // #ifndef BMI160_CALIBRATION_GYRO_SECONDS
-    //     static_assert(false, "BMI160_CALIBRATION_GYRO_SECONDS not set in defines");
-    // #endif
+}
 
-    // #if BMI160_CALIBRATION_GYRO_SECONDS == 0
-    //     m_Logger.debug("Skipping gyro calibration");
-    //     return;
-    // #endif
+void BMI160Sensor::maybeCalibrateGyro() {
+    #ifndef BMI160_CALIBRATION_GYRO_SECONDS
+        static_assert(false, "BMI160_CALIBRATION_GYRO_SECONDS not set in defines");
+    #endif
 
-    // // Wait for sensor to calm down before calibration
-    // constexpr uint8_t GYRO_CALIBRATION_DELAY_SEC = 3;
-    // constexpr float GYRO_CALIBRATION_DURATION_SEC = BMI160_CALIBRATION_GYRO_SECONDS;
-    // m_Logger.info("Put down the device and wait for baseline gyro reading calibration (%.1f seconds)", GYRO_CALIBRATION_DURATION_SEC);
-    // ledManager.on();
-    // for (uint8_t i = GYRO_CALIBRATION_DELAY_SEC; i > 0; i--) {
-    //     m_Logger.info("%i...", i);
-    //     delay(1000);
-    // }
-    // ledManager.off();
+    #if BMI160_CALIBRATION_GYRO_SECONDS == 0
+        m_Logger.debug("Skipping gyro calibration");
+        return;
+    #endif
 
-    // if (!getTemperature(&temperature)) {
-    //     m_Logger.error("Error: can't read temperature");
-    // }
-    // m_Calibration.temperature = temperature;
+    // Wait for sensor to calm down before calibration
+    constexpr uint8_t GYRO_CALIBRATION_DELAY_SEC = 3;
+    constexpr float GYRO_CALIBRATION_DURATION_SEC = BMI160_CALIBRATION_GYRO_SECONDS;
+    m_Logger.info("Put down the device and wait for baseline gyro reading calibration (%.1f seconds)", GYRO_CALIBRATION_DURATION_SEC);
+    ledManager.on();
+    for (uint8_t i = GYRO_CALIBRATION_DELAY_SEC; i > 0; i--) {
+        m_Logger.info("%i...", i);
+        delay(1000);
+    }
+    ledManager.off();
 
-    // #ifdef DEBUG_SENSOR
-    //     m_Logger.trace("Calibration temperature: %f", temperature);
-    // #endif
+    if (!getTemperature(&temperature)) {
+        m_Logger.error("Error: can't read temperature");
+    }
+    m_Calibration.temperature = temperature;
 
-    // if (!imu.getGyroDrdy()) {
-    //     m_Logger.error("Fatal error: gyroscope drdy = 0 (dead?)");
-    //     return;
-    // }
+    #ifdef DEBUG_SENSOR
+        m_Logger.trace("Calibration temperature: %f", temperature);
+    #endif
 
-    // ledManager.pattern(100, 100, 3);
-    // ledManager.on();
-    // m_Logger.info("Gyro calibration started...");
+    if (!imu.getGyroDrdy()) {
+        m_Logger.error("Fatal error: gyroscope drdy = 0 (dead?)");
+        return;
+    }
 
-    // constexpr uint16_t gyroCalibrationSamples =
-    //     GYRO_CALIBRATION_DURATION_SEC / (BMI160_ODR_GYR_MICROS / 1e6);
-    // int32_t rawGxyz[3] = {0};
-    // for (int i = 0; i < gyroCalibrationSamples; i++) {
-    //     imu.waitForGyroDrdy();
+    ledManager.pattern(100, 100, 3);
+    ledManager.on();
+    m_Logger.info("Gyro calibration started...");
 
-    //     int16_t gx, gy, gz;
-    //     imu.getRotation(&gx, &gy, &gz);
-    //     rawGxyz[0] += gx;
-    //     rawGxyz[1] += gy;
-    //     rawGxyz[2] += gz;
-    // }
-    // ledManager.off();
-    // m_Calibration.G_off[0] = ((double)rawGxyz[0]) / gyroCalibrationSamples;
-    // m_Calibration.G_off[1] = ((double)rawGxyz[1]) / gyroCalibrationSamples;
-    // m_Calibration.G_off[2] = ((double)rawGxyz[2]) / gyroCalibrationSamples;
+    constexpr uint16_t gyroCalibrationSamples =
+        GYRO_CALIBRATION_DURATION_SEC / (BMI160_ODR_GYR_MICROS / 1e6);
+    int32_t rawGxyz[3] = {0};
+    for (int i = 0; i < gyroCalibrationSamples; i++) {
+        imu.waitForGyroDrdy();
 
-    // #ifdef DEBUG_SENSOR
-    //     m_Logger.trace("Gyro calibration results: %f %f %f", UNPACK_VECTOR_ARRAY(m_Calibration.G_off));
-    // #endif
+        int16_t gx, gy, gz;
+        imu.getRotation(&gx, &gy, &gz);
+        rawGxyz[0] += gx;
+        rawGxyz[1] += gy;
+        rawGxyz[2] += gz;
+    }
+    ledManager.off();
+    m_Calibration.G_off[0] = ((double)rawGxyz[0]) / gyroCalibrationSamples;
+    m_Calibration.G_off[1] = ((double)rawGxyz[1]) / gyroCalibrationSamples;
+    m_Calibration.G_off[2] = ((double)rawGxyz[2]) / gyroCalibrationSamples;
+
+    #ifdef DEBUG_SENSOR
+        m_Logger.trace("Gyro calibration results: %f %f %f", UNPACK_VECTOR_ARRAY(m_Calibration.G_off));
+    #endif
 }
 
 void BMI160Sensor::maybeCalibrateAccel() {
-    uint8_t Cf = 0, Cr = CaliSamples-1;
-    int16_t Cx[CaliSamples]{},Cy[CaliSamples]{},Cz[CaliSamples]{};
-    int16_t prevM[3]{};
-    uint8_t accelDupCnt=0;
-    int8_t ignoreList[CaliSamples]{};
-    while(Cf!=Cr){
-        int16_t ax,ay,az,gx,gy,gz;
-        delay(10);
-        imu.getMotion6(&ax,&ay,&az,&gx,&gy,&gz);
-        if (abs(prevM[0] - ax) < AccTolerance && abs(prevM[1] - ay) < AccTolerance && abs(prevM[2] - az) < AccTolerance &&
-                abs(gx-m_Calibration.G_off[0]) < 100 && abs(gy-m_Calibration.G_off[1]) < 100 && abs(gz-m_Calibration.G_off[2]) < 100)
-        {
-            ledManager.off();
-            if(accelDupCnt<=CaliSamples/12){
-                accelDupCnt++;
-                if(Cf==0 && Cr == CaliSamples-1) Serial.print("Starting Accelero Calibration");
-                Cf++;
-                if (Cf >= CaliSamples)
-                    Cf = 0;
-                Cx[Cf] = ax;
-                Cy[Cf] = ay;
-                Cz[Cf] = az;
-                if (Cf == Cr)
-                {
-                    SlimeVR::Configuration::BMI160CalibrationConfig n_Calibration = getMagAccCalibration(Cx,Cy,Cz);
-                    if (verifyMagAccCali(n_Calibration,Cx,Cy,Cz,ignoreList))
-                    {
-                        Serial.print("New calibration valid\n");
-                        n_Calibration = getMagAccCalibration(Cx,Cy,Cz,ignoreList);
-                        for (uint8_t i = 0; i < 3; i++)
-                        {
-                            for (uint8_t j = 0; j < 3; j++)
-                            {
-                                m_Calibration.A_Ainv[i][j] = n_Calibration.M_Ainv[i][j];
-                            }
-                            m_Calibration.A_B[i] = n_Calibration.M_B[i];
-                        }
-                        SlimeVR::Configuration::CalibrationConfig calibration;
-                        calibration.type = SlimeVR::Configuration::CalibrationConfigType::BMI160;
-                        calibration.data.bmi160 = m_Calibration;
-                        configuration.setCalibration(sensorId, calibration);
-                        configuration.save(sensorId);
-                        return;
-                    }
-                    Cr += CaliSamples / 4;
-                    if (Cr >= CaliSamples)
-                        Cr -= CaliSamples;
-                }
-                delay(10);
-            }
-            else{
-                ledManager.on();
-            }
-        }
-        else if (abs(gx-m_Calibration.G_off[0]) > 400 || abs(gy-m_Calibration.G_off[1]) > 400 || abs(gz-m_Calibration.G_off[2]) > 400){
-            accelDupCnt = 0;
-        }
-        prevM[0] = ax;
-        prevM[1] = ay;
-        prevM[2] = az;
+    #ifndef BMI160_ACCEL_CALIBRATION_METHOD
+        static_assert(false, "BMI160_ACCEL_CALIBRATION_METHOD not set in defines");
+    #endif
+
+    #if BMI160_ACCEL_CALIBRATION_METHOD == ACCEL_CALIBRATION_METHOD_SKIP
+        m_Logger.debug("Skipping accelerometer calibration");
+        return;
+    #endif
+
+    MagnetoCalibration* magneto = new MagnetoCalibration();
+
+    // Blink calibrating led before user should rotate the sensor
+    #if BMI160_ACCEL_CALIBRATION_METHOD == ACCEL_CALIBRATION_METHOD_ROTATION
+        m_Logger.info("After 3 seconds, Gently rotate the device while it's gathering data");
+    #elif BMI160_ACCEL_CALIBRATION_METHOD == ACCEL_CALIBRATION_METHOD_6POINT
+        m_Logger.info("Put the device into 6 unique orientations (all sides), leave it still and do not hold/touch for 3 seconds each");
+    #endif
+    constexpr uint8_t ACCEL_CALIBRATION_DELAY_SEC = 3;
+    ledManager.on();
+    for (uint8_t i = ACCEL_CALIBRATION_DELAY_SEC; i > 0; i--) {
+        m_Logger.info("%i...", i);
+        delay(1000);
     }
-    // #ifndef BMI160_ACCEL_CALIBRATION_METHOD
-    //     static_assert(false, "BMI160_ACCEL_CALIBRATION_METHOD not set in defines");
-    // #endif
+    ledManager.off();
 
-    // #if BMI160_ACCEL_CALIBRATION_METHOD == ACCEL_CALIBRATION_METHOD_SKIP
-    //     m_Logger.debug("Skipping accelerometer calibration");
-    //     return;
-    // #endif
+    #if BMI160_ACCEL_CALIBRATION_METHOD == ACCEL_CALIBRATION_METHOD_ROTATION
+        uint16_t accelCalibrationSamples = 200;
+        ledManager.pattern(100, 100, 6);
+        delay(100);
+        ledManager.on();
+        m_Logger.debug("Gathering accelerometer data...");
+        for (int i = 0; i < accelCalibrationSamples; i++)
+        {
+            int16_t ax, ay, az;
+            imu.getAcceleration(&ax, &ay, &az);
+            magneto->sample(ax, ay, az);
 
-    // MagnetoCalibration* magneto = new MagnetoCalibration();
+            delay(100);
+        }
+        ledManager.off();
+        m_Logger.debug("Calculating accelerometer calibration data...");
+    #elif BMI160_ACCEL_CALIBRATION_METHOD == ACCEL_CALIBRATION_METHOD_6POINT
+        RestDetectionParams calibrationRestDetectionParams;
+        calibrationRestDetectionParams.restMinTimeMicros = 3 * 1e6;
+        calibrationRestDetectionParams.restThAcc = 0.25f;
+        RestDetection calibrationRestDetection(
+            calibrationRestDetectionParams,
+            BMI160_ODR_GYR_MICROS / 1e6f,
+            BMI160_ODR_ACC_MICROS / 1e6f
+        );
 
-    // // Blink calibrating led before user should rotate the sensor
-    // #if BMI160_ACCEL_CALIBRATION_METHOD == ACCEL_CALIBRATION_METHOD_ROTATION
-    //     m_Logger.info("After 3 seconds, Gently rotate the device while it's gathering data");
-    // #elif BMI160_ACCEL_CALIBRATION_METHOD == ACCEL_CALIBRATION_METHOD_6POINT
-    //     m_Logger.info("Put the device into 6 unique orientations (all sides), leave it still and do not hold/touch for 3 seconds each");
-    // #endif
-    // constexpr uint8_t ACCEL_CALIBRATION_DELAY_SEC = 3;
-    // ledManager.on();
-    // for (uint8_t i = ACCEL_CALIBRATION_DELAY_SEC; i > 0; i--) {
-    //     m_Logger.info("%i...", i);
-    //     delay(1000);
-    // }
-    // ledManager.off();
+        constexpr uint16_t expectedPositions = 6;
+        constexpr uint16_t numSamplesPerPosition = 96;
 
-    // #if BMI160_ACCEL_CALIBRATION_METHOD == ACCEL_CALIBRATION_METHOD_ROTATION
-    //     uint16_t accelCalibrationSamples = 200;
-    //     ledManager.pattern(100, 100, 6);
-    //     delay(100);
-    //     ledManager.on();
-    //     m_Logger.debug("Gathering accelerometer data...");
-    //     for (int i = 0; i < accelCalibrationSamples; i++)
-    //     {
-    //         int16_t ax, ay, az;
-    //         imu.getAcceleration(&ax, &ay, &az);
-    //         magneto->sample(ax, ay, az);
+        uint16_t numPositionsRecorded = 0;
+        uint16_t numCurrentPositionSamples = 0;
+        bool waitForMotion = true;
 
-    //         delay(100);
-    //     }
-    //     ledManager.off();
-    //     m_Logger.debug("Calculating accelerometer calibration data...");
-    // #elif BMI160_ACCEL_CALIBRATION_METHOD == ACCEL_CALIBRATION_METHOD_6POINT
-    //     RestDetectionParams calibrationRestDetectionParams;
-    //     calibrationRestDetectionParams.restMinTimeMicros = 3 * 1e6;
-    //     calibrationRestDetectionParams.restThAcc = 0.25f;
-    //     RestDetection calibrationRestDetection(
-    //         calibrationRestDetectionParams,
-    //         BMI160_ODR_GYR_MICROS / 1e6f,
-    //         BMI160_ODR_ACC_MICROS / 1e6f
-    //     );
+        float* accelCalibrationChunk = new float[numSamplesPerPosition * 3];
+        ledManager.pattern(100, 100, 6);
+        ledManager.on();
+        m_Logger.info("Gathering accelerometer data...");
+        m_Logger.info("Waiting for position %i, you can leave the device as is...", numPositionsRecorded + 1);
+        while (true) {
+            int16_t ax, ay, az;
+            imu.getAcceleration(&ax, &ay, &az);
+            sensor_real_t scaled[3];
+            scaled[0] = ax * BMI160_ASCALE;
+            scaled[1] = ay * BMI160_ASCALE;
+            scaled[2] = az * BMI160_ASCALE;
 
-    //     constexpr uint16_t expectedPositions = 6;
-    //     constexpr uint16_t numSamplesPerPosition = 96;
+            calibrationRestDetection.updateAcc(BMI160_ODR_ACC_MICROS, scaled);
 
-    //     uint16_t numPositionsRecorded = 0;
-    //     uint16_t numCurrentPositionSamples = 0;
-    //     bool waitForMotion = true;
-
-    //     float* accelCalibrationChunk = new float[numSamplesPerPosition * 3];
-    //     ledManager.pattern(100, 100, 6);
-    //     ledManager.on();
-    //     m_Logger.info("Gathering accelerometer data...");
-    //     m_Logger.info("Waiting for position %i, you can leave the device as is...", numPositionsRecorded + 1);
-    //     while (true) {
-    //         int16_t ax, ay, az;
-    //         imu.getAcceleration(&ax, &ay, &az);
-    //         sensor_real_t scaled[3];
-    //         scaled[0] = ax * BMI160_ASCALE;
-    //         scaled[1] = ay * BMI160_ASCALE;
-    //         scaled[2] = az * BMI160_ASCALE;
-
-    //         calibrationRestDetection.updateAcc(BMI160_ODR_ACC_MICROS, scaled);
-
-    //         if (waitForMotion) {
-    //             if (!calibrationRestDetection.getRestDetected()) {
-    //                 waitForMotion = false;
-    //             }
-    //             delayMicroseconds(BMI160_ODR_ACC_MICROS);
-    //             continue;
-    //         }
+            if (waitForMotion) {
+                if (!calibrationRestDetection.getRestDetected()) {
+                    waitForMotion = false;
+                }
+                delayMicroseconds(BMI160_ODR_ACC_MICROS);
+                continue;
+            }
             
-    //         if (calibrationRestDetection.getRestDetected()) {
-    //             const uint16_t i = numCurrentPositionSamples * 3;
-    //             accelCalibrationChunk[i + 0] = ax;
-    //             accelCalibrationChunk[i + 1] = ay;
-    //             accelCalibrationChunk[i + 2] = az;
-    //             numCurrentPositionSamples++;
+            if (calibrationRestDetection.getRestDetected()) {
+                const uint16_t i = numCurrentPositionSamples * 3;
+                accelCalibrationChunk[i + 0] = ax;
+                accelCalibrationChunk[i + 1] = ay;
+                accelCalibrationChunk[i + 2] = az;
+                numCurrentPositionSamples++;
 
-    //             if (numCurrentPositionSamples >= numSamplesPerPosition) {
-    //                 for (int i = 0; i < numSamplesPerPosition; i++) {
-    //                     magneto->sample(
-    //                         accelCalibrationChunk[i * 3 + 0],
-    //                         accelCalibrationChunk[i * 3 + 1],
-    //                         accelCalibrationChunk[i * 3 + 2]
-    //                     );
-    //                 }
-    //                 numPositionsRecorded++;
-    //                 numCurrentPositionSamples = 0;
-    //                 if (numPositionsRecorded < expectedPositions) {
-    //                     ledManager.pattern(50, 50, 2);
-    //                     ledManager.on();
-    //                     m_Logger.info("Recorded, waiting for position %i...", numPositionsRecorded + 1);
-    //                     waitForMotion = true;
-    //                 }
-    //             }
-    //         } else {
-    //             numCurrentPositionSamples = 0;
-    //         }
+                if (numCurrentPositionSamples >= numSamplesPerPosition) {
+                    for (int i = 0; i < numSamplesPerPosition; i++) {
+                        magneto->sample(
+                            accelCalibrationChunk[i * 3 + 0],
+                            accelCalibrationChunk[i * 3 + 1],
+                            accelCalibrationChunk[i * 3 + 2]
+                        );
+                    }
+                    numPositionsRecorded++;
+                    numCurrentPositionSamples = 0;
+                    if (numPositionsRecorded < expectedPositions) {
+                        ledManager.pattern(50, 50, 2);
+                        ledManager.on();
+                        m_Logger.info("Recorded, waiting for position %i...", numPositionsRecorded + 1);
+                        waitForMotion = true;
+                    }
+                }
+            } else {
+                numCurrentPositionSamples = 0;
+            }
 
-    //         if (numPositionsRecorded >= expectedPositions) break;
+            if (numPositionsRecorded >= expectedPositions) break;
 
-    //         delayMicroseconds(BMI160_ODR_ACC_MICROS);
-    //     }
-    //     ledManager.off();
-    //     m_Logger.debug("Calculating accelerometer calibration data...");
-    //     delete[] accelCalibrationChunk;
-    // #endif
+            delayMicroseconds(BMI160_ODR_ACC_MICROS);
+        }
+        ledManager.off();
+        m_Logger.debug("Calculating accelerometer calibration data...");
+        delete[] accelCalibrationChunk;
+    #endif
 
-    // float A_BAinv[4][3];
-    // magneto->current_calibration(A_BAinv);
-    // delete magneto;
+    float A_BAinv[4][3];
+    magneto->current_calibration(A_BAinv);
+    delete magneto;
 
-    // m_Logger.debug("Finished calculating accelerometer calibration");
-    // m_Logger.debug("Accelerometer calibration matrix:");
-    // m_Logger.debug("{");
-    // for (int i = 0; i < 3; i++) {
-    //     m_Calibration.A_B[i] = A_BAinv[0][i];
-    //     m_Calibration.A_Ainv[0][i] = A_BAinv[1][i];
-    //     m_Calibration.A_Ainv[1][i] = A_BAinv[2][i];
-    //     m_Calibration.A_Ainv[2][i] = A_BAinv[3][i];
-    //     m_Logger.debug("  %f, %f, %f, %f", A_BAinv[0][i], A_BAinv[1][i], A_BAinv[2][i], A_BAinv[3][i]);
-    // }
-    // m_Logger.debug("}");
+    m_Logger.debug("Finished calculating accelerometer calibration");
+    m_Logger.debug("Accelerometer calibration matrix:");
+    m_Logger.debug("{");
+    for (int i = 0; i < 3; i++) {
+        m_Calibration.A_B[i] = A_BAinv[0][i];
+        m_Calibration.A_Ainv[0][i] = A_BAinv[1][i];
+        m_Calibration.A_Ainv[1][i] = A_BAinv[2][i];
+        m_Calibration.A_Ainv[2][i] = A_BAinv[3][i];
+        m_Logger.debug("  %f, %f, %f, %f", A_BAinv[0][i], A_BAinv[1][i], A_BAinv[2][i], A_BAinv[3][i]);
+    }
+    m_Logger.debug("}");
 }
 
 void BMI160Sensor::maybeCalibrateMag() {
-    uint8_t Cf = 0, Cr = CaliSamples-1;
-    int16_t Cx[CaliSamples]{},Cy[CaliSamples]{},Cz[CaliSamples]{};
-    int8_t ignoreList[CaliSamples]{};
-    while(Cf!=Cr){
-        int16_t mx,my,mz;
-        imu.getMagnetometer(&mx,&my,&mz);
-        ledManager.on();
-        if (abs(Cx[Cf] - mx) > MagTolerance || abs(Cy[Cf] - my) > MagTolerance || abs(Cz[Cf] - mz) > MagTolerance)
-        {
-            ledManager.off();
-            if(Cf==0 && Cr == CaliSamples-1) Serial.print("Starting Magneto Calibration");
-            Cf++;
-            if (Cf >= CaliSamples)
-                Cf = 0;
-            Cx[Cf] = mx;
-            Cy[Cf] = my;
-            Cz[Cf] = mz;
-            if (Cf == Cr)
-            {
-                SlimeVR::Configuration::BMI160CalibrationConfig n_Calibration = getMagAccCalibration(Cx,Cy,Cz);
-                if (verifyMagAccCali(n_Calibration,Cx,Cy,Cz,ignoreList))
-                {
-                    Serial.print("New calibration valid\n");
-                    n_Calibration = getMagAccCalibration(Cx,Cy,Cz,ignoreList);
-                    for (uint8_t i = 0; i < 3; i++)
-                    {
-                        for (uint8_t j = 0; j < 3; j++)
-                        {
-                            m_Calibration.M_Ainv[i][j] = n_Calibration.M_Ainv[i][j];
-                        }
-                        m_Calibration.M_B[i] = n_Calibration.M_B[i];
-                    }
-                    SlimeVR::Configuration::CalibrationConfig calibration;
-                    calibration.type = SlimeVR::Configuration::CalibrationConfigType::BMI160;
-                    calibration.data.bmi160 = m_Calibration;
-                    configuration.setCalibration(sensorId, calibration);
-                    configuration.save(sensorId);
-                    return;
-                }
-                Cr += CaliSamples / 4;
-                if (Cr >= CaliSamples)
-                    Cr -= CaliSamples;
-            }
-            delay(15);
-        }
+#if !USE_6_AXIS
+    #ifndef BMI160_CALIBRATION_MAG_SECONDS
+        static_assert(false, "BMI160_CALIBRATION_MAG_SECONDS not set in defines");
+    #endif
+
+    #if BMI160_CALIBRATION_MAG_SECONDS == 0
+        m_Logger.debug("Skipping magnetometer calibration");
+        return;
+    #endif
+
+    MagnetoCalibration* magneto = new MagnetoCalibration();
+
+    constexpr uint8_t MAG_CALIBRATION_DELAY_SEC = 3;
+    constexpr float MAG_CALIBRATION_DURATION_SEC = BMI160_CALIBRATION_MAG_SECONDS;
+    m_Logger.info("After 3 seconds, rotate the device in figure 8 pattern while it's gathering data (%.1f seconds)", MAG_CALIBRATION_DURATION_SEC);
+    for (uint8_t i = MAG_CALIBRATION_DELAY_SEC; i > 0; i--) {
+        m_Logger.info("%i...", i);
+        delay(1000);
     }
-// #if !USE_6_AXIS
-//     #ifndef BMI160_CALIBRATION_MAG_SECONDS
-//         static_assert(false, "BMI160_CALIBRATION_MAG_SECONDS not set in defines");
-//     #endif
-
-//     #if BMI160_CALIBRATION_MAG_SECONDS == 0
-//         m_Logger.debug("Skipping magnetometer calibration");
-//         return;
-//     #endif
-
-//     MagnetoCalibration* magneto = new MagnetoCalibration();
-
-//     constexpr uint8_t MAG_CALIBRATION_DELAY_SEC = 3;
-//     constexpr float MAG_CALIBRATION_DURATION_SEC = BMI160_CALIBRATION_MAG_SECONDS;
-//     m_Logger.info("After 3 seconds, rotate the device in figure 8 pattern while it's gathering data (%.1f seconds)", MAG_CALIBRATION_DURATION_SEC);
-//     for (uint8_t i = MAG_CALIBRATION_DELAY_SEC; i > 0; i--) {
-//         m_Logger.info("%i...", i);
-//         delay(1000);
-//     }
-//     ledManager.pattern(100, 100, 9);
-//     delay(100);
-//     ledManager.on();
-//     m_Logger.debug("Gathering magnetometer data...");
+    ledManager.pattern(100, 100, 9);
+    delay(100);
+    ledManager.on();
+    m_Logger.debug("Gathering magnetometer data...");
     
-//     constexpr float SAMPLE_DELAY_MS = 100.0f;
-//     constexpr uint16_t magCalibrationSamples =
-//         MAG_CALIBRATION_DURATION_SEC / (SAMPLE_DELAY_MS / 1e3f);
+    constexpr float SAMPLE_DELAY_MS = 100.0f;
+    constexpr uint16_t magCalibrationSamples =
+        MAG_CALIBRATION_DURATION_SEC / (SAMPLE_DELAY_MS / 1e3f);
 
-//     uint8_t magdata[6];
-//     for (int i = 0; i < magCalibrationSamples; i++) {
-//         ledManager.on();
+    uint8_t magdata[6];
+    for (int i = 0; i < magCalibrationSamples; i++) {
+        ledManager.on();
 
-//         int16_t mx, my, mz;
-//         imu.getMagnetometerXYZBuffer(magdata);
-//         getMagnetometerXYZFromBuffer(magdata, &mx, &my, &mz);
-//         magneto->sample(mx, my, mz);
+        int16_t mx, my, mz;
+        imu.getMagnetometerXYZBuffer(magdata);
+        getMagnetometerXYZFromBuffer(magdata, &mx, &my, &mz);
+        magneto->sample(mx, my, mz);
 
-//         ledManager.off();
-//         delay(SAMPLE_DELAY_MS);
-//     }
-//     ledManager.off();
-//     m_Logger.debug("Calculating magnetometer calibration data...");
+        ledManager.off();
+        delay(SAMPLE_DELAY_MS);
+    }
+    ledManager.off();
+    m_Logger.debug("Calculating magnetometer calibration data...");
 
-//     float M_BAinv[4][3];
-//     magneto->current_calibration(M_BAinv);
-//     delete magneto;
+    float M_BAinv[4][3];
+    magneto->current_calibration(M_BAinv);
+    delete magneto;
 
-//     m_Logger.debug("[INFO] Magnetometer calibration matrix:");
-//     m_Logger.debug("{");
-//     for (int i = 0; i < 3; i++) {
-//         m_Calibration.M_B[i] = M_BAinv[0][i];
-//         m_Calibration.M_Ainv[0][i] = M_BAinv[1][i];
-//         m_Calibration.M_Ainv[1][i] = M_BAinv[2][i];
-//         m_Calibration.M_Ainv[2][i] = M_BAinv[3][i];
-//         m_Logger.debug("  %f, %f, %f, %f", M_BAinv[0][i], M_BAinv[1][i], M_BAinv[2][i], M_BAinv[3][i]);
-//     }
-//     m_Logger.debug("}");
-// #endif
+    m_Logger.debug("[INFO] Magnetometer calibration matrix:");
+    m_Logger.debug("{");
+    for (int i = 0; i < 3; i++) {
+        m_Calibration.M_B[i] = M_BAinv[0][i];
+        m_Calibration.M_Ainv[0][i] = M_BAinv[1][i];
+        m_Calibration.M_Ainv[1][i] = M_BAinv[2][i];
+        m_Calibration.M_Ainv[2][i] = M_BAinv[3][i];
+        m_Logger.debug("  %f, %f, %f, %f", M_BAinv[0][i], M_BAinv[1][i], M_BAinv[2][i], M_BAinv[3][i]);
+    }
+    m_Logger.debug("}");
+#endif
 }
 
 void BMI160Sensor::remapGyroAccel(sensor_real_t* x, sensor_real_t* y, sensor_real_t* z) {
@@ -1294,90 +1109,8 @@ void BMI160Sensor::getMagnetometerXYZFromBuffer(uint8_t* data, int16_t* x, int16
     #elif BMI160_MAG_TYPE == BMI160_MAG_TYPE_QMC
         // qmc5883l -> 0 lsb 1 msb
         // XYZ order
-        *x = (((int32_t)data[0] << 8) | data[1]) -32768;
-        *y = (((int32_t)data[2] << 8) | data[3]) -32768;
-        *z = (((int32_t)data[4] << 8) | data[4]) -32768;
+        *x = ((int16_t)data[1] << 8) | data[0];
+        *y = ((int16_t)data[3] << 8) | data[2];
+        *z = ((int16_t)data[5] << 8) | data[4];
     #endif
-}
-
-SlimeVR::Configuration::BMI160CalibrationConfig BMI160Sensor::getMagAccCalibration(int16_t *Cx,int16_t *Cy,int16_t *Cz,int8_t *ignoreList)
-{
-    SlimeVR::Configuration::BMI160CalibrationConfig retVal;
-    MagnetoCalibration magneto{};
-    for (uint8_t i = 0; i < CaliSamples; i++)
-    {
-        if(!ignoreList||!ignoreList[i])
-            magneto.sample(Cx[i],Cy[i],Cz[i]);
-    }
-    float M_BAinv[4][3];
-    magneto.current_calibration(M_BAinv);
-    for (int i = 0; i < 3; i++)
-    {
-        retVal.M_B[i] = M_BAinv[0][i];
-        retVal.M_Ainv[0][i] = M_BAinv[1][i];
-        retVal.M_Ainv[1][i] = M_BAinv[2][i];
-        retVal.M_Ainv[2][i] = M_BAinv[3][i];
-    }
-    return retVal;
-}
-bool BMI160Sensor::verifyMagAccCali(SlimeVR::Configuration::BMI160CalibrationConfig cali,int16_t *Cx,int16_t *Cy,int16_t *Cz,int8_t *ignoreList)
-{
-    return true;
-    // Verify if previous calibration data valid.
-    uint8_t invalidCnt = 0;
-    float avgstr = 0.0f;
-    for (uint8_t i = 0; i < CaliSamples; i++)
-    {
-        float tx, ty, tz;
-        float x, y, z;
-        tx = Cx[i] - cali.M_B[0];
-        ty = Cy[i] - cali.M_B[1];
-        tz = Cz[i] - cali.M_B[2];
-#if useFullCalibrationMatrix == true
-        x = cali.M_Ainv[0][0] * tx + cali.M_Ainv[0][1] * ty + cali.M_Ainv[0][2] * tz;
-        y = cali.M_Ainv[1][0] * tx + cali.M_Ainv[1][1] * ty + cali.M_Ainv[1][2] * tz;
-        z = cali.M_Ainv[2][0] * tx + cali.M_Ainv[2][1] * ty + cali.M_Ainv[2][2] * tz;
-#else
-        x = tx;
-        y = ty;
-        z = tz;
-#endif
-        avgstr += sqrt(sq(x) + sq(y) + sq(z)) / CaliSamples;
-    }
-    if(isnan(avgstr)) return false;
-
-    // Serial.printf("Average Mag strength with given calibration : %.1f\nMag Strengths:\n", avgstr);
-    for (uint8_t i = 0; i < CaliSamples; i++)
-    {
-        float tx, ty, tz;
-        float x, y, z;
-        tx = Cx[i] - cali.M_B[0];
-        ty = Cy[i] - cali.M_B[1];
-        tz = Cz[i] - cali.M_B[2];
-#if useFullCalibrationMatrix == true
-        x = cali.M_Ainv[0][0] * tx + cali.M_Ainv[0][1] * ty + cali.M_Ainv[0][2] * tz;
-        y = cali.M_Ainv[1][0] * tx + cali.M_Ainv[1][1] * ty + cali.M_Ainv[1][2] * tz;
-        z = cali.M_Ainv[2][0] * tx + cali.M_Ainv[2][1] * ty + cali.M_Ainv[2][2] * tz;
-#else
-        x = tx;
-        y = ty;
-        z = tz;
-#endif
-        // Serial.printf(" %.1f \n", magstr[i]);
-        if (!(abs(avgstr - sqrt(sq(x) + sq(y) + sq(z))) < AccTolerance*1.5)){
-            invalidCnt++;
-            ignoreList[i]=1;
-            Serial.printf("AVGSTR = %f!\n",avgstr);
-        }
-        else ignoreList[i]=0;
-    }
-    if (invalidCnt < CaliSamples / 8)
-    {
-        return true;
-    }
-    else{
-        for(uint8_t i=0; i< CaliSamples; i++)
-            ignoreList[i]=0;
-        return false;
-    }
 }
