@@ -246,22 +246,9 @@ void MPU9250Sensor::motionLoop() {
 #endif
     fusedRotation *= sensorOffset;
 
-<<<<<<< HEAD
-#if ENABLE_INSPECTION
-    {
-        Network::sendInspectionFusedIMUData(sensorId, quaternion);
-    }
-#endif
-
-    if (!lastQuatSent.equalsWithEpsilon(quaternion))
-    {
-        newData = true;
-        lastQuatSent = quaternion;
-=======
     if(!lastFusedRotationSent.equalsWithEpsilon(fusedRotation)) {
         newFusedRotation = true;
         lastFusedRotationSent = fusedRotation;
->>>>>>> upstream/main
     }
 }
 
