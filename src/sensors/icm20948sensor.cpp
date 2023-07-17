@@ -99,7 +99,7 @@ void ICM20948Sensor::sendData()
         }
         #else
         {
-            Network::sendRotationData(sensorId, &fusedRotation, DATA_TYPE_NORMAL, dmpData.Quat9.Data.Accuracy);
+            networkConnection.sendRotationData(sensorId, &fusedRotation, DATA_TYPE_NORMAL, dmpData.Quat9.Data.Accuracy);
         }
         #endif
     }
@@ -344,10 +344,10 @@ void ICM20948Sensor::readRotation()
             double q2 = ((double)dmpData.Quat9.Data.Q2) / DMPNUMBERTODOUBLECONVERTER; // Convert to double. Divide by 2^30
             double q3 = ((double)dmpData.Quat9.Data.Q3) / DMPNUMBERTODOUBLECONVERTER; // Convert to double. Divide by 2^30
             double q0 = sqrt(1.0 - ((q1 * q1) + (q2 * q2) + (q3 * q3)));
-            quaternion.w = q0;
-            quaternion.x = q1;
-            quaternion.y = q2;
-            quaternion.z = q3;
+            fusedRotation.w = q0;
+            fusedRotation.x = q1;
+            fusedRotation.y = q2;  
+            fusedRotation.z = q3;
 
             #if SEND_ACCELERATION
             calculateAccelerationWithoutGravity(&quaternion);
@@ -355,7 +355,7 @@ void ICM20948Sensor::readRotation()
 
             quaternion *= sensorOffset; //imu rotation
 
-            newData = true;
+            newFusedRotation = true;
             lastData = millis();
         }
     }

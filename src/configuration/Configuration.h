@@ -38,6 +38,7 @@ namespace SlimeVR {
 
             void save();
             void save(int i);
+            
             void reset();
 
             void print();

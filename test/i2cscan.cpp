@@ -11,7 +11,7 @@
 #include "ota.h"
 #include "configuration/Configuration.h"
 #include "helper_3dmath.h"
-#include "network/udpclient.h"
+#include "udpclient.h"
 #include "credentials.h"
 
 SlimeVR::Configuration::DeviceConfig config;

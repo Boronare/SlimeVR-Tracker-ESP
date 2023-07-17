@@ -37,32 +37,27 @@ unsigned long last_rssi_sample = 0;
 // TODO: Cleanup with proper classes
 SlimeVR::Logging::Logger wifiHandlerLogger("WiFiHandler");
 
-void reportWifiError()
-{
-    if (lastWifiReportTime + 1000 < millis())
-    {
+void reportWifiError() {
+    if(lastWifiReportTime + 1000 < millis()) {
         lastWifiReportTime = millis();
         Serial.print(".");
     }
 }
 
-void setStaticIPIfDefined()
-{
-#ifdef WIFI_USE_STATICIP
+void setStaticIPIfDefined() {
+    #ifdef WIFI_USE_STATICIP
     const IPAddress ip(WIFI_STATIC_IP);
     const IPAddress gateway(WIFI_STATIC_GATEWAY);
     const IPAddress subnet(WIFI_STATIC_SUBNET);
     WiFi.config(ip, gateway, subnet);
-#endif
+    #endif
 }
 
-bool WiFiNetwork::isConnected()
-{
+bool WiFiNetwork::isConnected() {
     return isWifiConnected;
 }
 
-void WiFiNetwork::setWiFiCredentials(const char *SSID, const char *pass)
-{
+void WiFiNetwork::setWiFiCredentials(const char * SSID, const char * pass) {
     stopProvisioning();
     setStaticIPIfDefined();
     WiFi.begin(SSID, pass);
@@ -72,13 +67,11 @@ void WiFiNetwork::setWiFiCredentials(const char *SSID, const char *pass)
     wifiConnectionTimeout = millis();
 }
 
-IPAddress WiFiNetwork::getAddress()
-{
+IPAddress WiFiNetwork::getAddress() {
     return WiFi.localIP();
 }
 
-void WiFiNetwork::setUp()
-{
+void WiFiNetwork::setUp() {
     wifiHandlerLogger.info("Setting up WiFi");
     WiFi.persistent(true);
     WiFi.mode(WIFI_STA);
@@ -125,8 +118,7 @@ void WiFiNetwork::setUp()
 #endif
 }
 
-void onConnected()
-{
+void onConnected() {
     WiFiNetwork::stopProvisioning();
     statusManager.setStatus(SlimeVR::Status::WIFI_CONNECTING, false);
     isWifiConnected = true;
@@ -140,10 +132,8 @@ uint8_t WiFiNetwork::getWiFiState() {
 
 void WiFiNetwork::upkeep() {
     upkeepProvisioning();
-    if (WiFi.status() != WL_CONNECTED)
-    {
-        if (isWifiConnected)
-        {
+    if(WiFi.status() != WL_CONNECTED) {
+        if(isWifiConnected) {
             wifiHandlerLogger.warn("Connection to WiFi lost, reconnecting...");
             isWifiConnected = false;
         }
@@ -226,15 +216,11 @@ void WiFiNetwork::upkeep() {
         }
         return;
     }
-    if (!isWifiConnected)
-    {
+    if(!isWifiConnected) {
         onConnected();
         return;
-    }
-    else
-    {
-        if (millis() - last_rssi_sample >= 2000)
-        {
+    } else {
+        if(millis() - last_rssi_sample >= 2000) {
             last_rssi_sample = millis();
             uint8_t signalStrength = WiFi.RSSI();
             networkConnection.sendSignalStrength(signalStrength);

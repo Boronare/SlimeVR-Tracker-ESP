@@ -26,12 +26,9 @@
 
 #include <stdint.h>
 
-namespace SlimeVR
-{
-    namespace Configuration
-    {
-        struct BMI160CalibrationConfig
-        {
+namespace SlimeVR {
+    namespace Configuration {
+        struct BMI160CalibrationConfig {
             // accelerometer offsets and correction matrix
             float A_B[3];
             float A_Ainv[3][3];
@@ -47,8 +44,7 @@ namespace SlimeVR
             float temperature;
         };
 
-        struct MPU6050CalibrationConfig
-        {
+        struct MPU6050CalibrationConfig {
             // accelerometer offsets and correction matrix
             float A_B[3];
 
@@ -56,8 +52,7 @@ namespace SlimeVR
             float G_off[3];
         };
 
-        struct MPU9250CalibrationConfig
-        {
+        struct MPU9250CalibrationConfig {
             // accelerometer offsets and correction matrix
             float A_B[3];
             float A_Ainv[3][3];
@@ -70,8 +65,7 @@ namespace SlimeVR
             float G_off[3];
         };
 
-        struct ICM20948CalibrationConfig
-        {
+        struct ICM20948CalibrationConfig {
             // gyroscope bias
             int32_t G[3];
 
@@ -81,59 +75,19 @@ namespace SlimeVR
             // compass bias
             int32_t C[3];
         };
-        struct QMI8658CalibrationConfig
-        {
-            // magnetometer offsets and correction matrix
-            float M_B[3];
-            float M_Ainv[3][3];
 
-            // raw offsets, determined from gyro at rest
-            float G_off[3];
+        enum CalibrationConfigType { NONE, BMI160, MPU6050, MPU9250, ICM20948, QMI8658 };
 
-            // accelerometer offsets and correction matrix
-            float A_B[3];
-            float A_Ainv[3][3];
+        const char* calibrationConfigTypeToString(CalibrationConfigType type);
 
-            float temperature;
-        };
-        struct ICM42688CalibrationConfig {
-            // accelerometer offsets and correction matrix
-            float A_B[3];
-            float A_Ainv[3][3];
-
-            // magnetometer offsets and correction matrix
-            float M_B[3];
-            float M_Ainv[3][3];
-
-            // raw offsets, determined from gyro at rest
-            float G_off[3];
-        };
-
-        enum CalibrationConfigType
-        {
-            NONE,
-            BMI160,
-            MPU6050,
-            MPU9250,
-            ICM20948,
-            QMI8658,
-            ICM42688,
-        };
-
-        const char *calibrationConfigTypeToString(CalibrationConfigType type);
-
-        struct CalibrationConfig
-        {
+        struct CalibrationConfig {
             CalibrationConfigType type;
 
-            union
-            {
+            union {
                 BMI160CalibrationConfig bmi160;
                 MPU6050CalibrationConfig mpu6050;
                 MPU9250CalibrationConfig mpu9250;
                 ICM20948CalibrationConfig icm20948;
-                QMI8658CalibrationConfig qmi8658;
-                ICM42688CalibrationConfig icm42688;
             } data;
         };
     }
