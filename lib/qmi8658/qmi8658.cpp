@@ -156,8 +156,9 @@ uint16_t QMI8658::getFIFOCount()
 }
 
 void QMI8658::getFIFOBytes(uint8_t *data, uint16_t length){
+    if(length<12) return;
     I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL9, 0x05);
-    delay(2);
+    delay(5);
     I2Cdev::readBytes(devAddr, QMI8658_RA_FIFO_DATA, length,data);
     I2Cdev::writeByte(devAddr, QMI8658_RA_FIFO_CTRL, 0b00001110);
 }

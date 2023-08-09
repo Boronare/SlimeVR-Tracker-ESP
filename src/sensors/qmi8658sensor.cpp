@@ -102,14 +102,12 @@ void QMI8658Sensor::motionSetup()
 void QMI8658Sensor::getValueScaled()
 {
     uint8_t buffer[1536];
-    uint16_t fifoCnt;
+    int16_t fifoCnt;
     
     if(!imu.isAlive()) imu.initialize(addr, 0x2C+sensorId);
-    else
-    while(1){
+    else{
     // uint8_t status = imu.getStatus0();
     uint8_t i;
-    uint8_t fifoStatus;
     int16_t ax, ay, az, gx, gy, gz, mx, my, mz;
             fifoCnt = imu.getFIFOCount();
             imu.getFIFOBytes(buffer,fifoCnt);
@@ -124,6 +122,7 @@ void QMI8658Sensor::getValueScaled()
                 // Serial.printf("i:%d G:%+6d %+6d %+6d A:%+6d %+6d %+6d\n",i,gx,gy,gz,ax,ay,az);
 
                 
+        AutoCalibrateGyro(gx,gy,gz,ax,ay,az);
             Axyz[0] = (float)ax;
             Axyz[1] = (float)ay;
             Axyz[2] = (float)az;
@@ -204,11 +203,8 @@ void QMI8658Sensor::getValueScaled()
                     vqf.updateMag(Mxyz);
                 }
             }
-            imu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
-        optimistic_yield(100);
-        break;
     }
-//     // AutoCalibrateGyro(gx,gy,gz,mx,my,mz);
+        optimistic_yield(100);
 //     // Serial.printf("A : %+6d %+6d %+6d / G: %+6d %+6d %+6d / M:%+6d %+6d %+6d\n",ax,ay,az,gx,gy,gz,mx,my,mz);
 
 //     Gxyz[0] = (gx-m_Calibration.G_off[0]) * gscale;
@@ -356,12 +352,12 @@ float QMI8658Sensor::getTemperature()
 {
     return (float)imu.getTemperature()/256;
 }
-void QMI8658Sensor::AutoCalibrateGyro(int16_t gx, int16_t gy, int16_t gz, int16_t mx, int16_t my, int16_t mz){
+void QMI8658Sensor::AutoCalibrateGyro(int16_t gx, int16_t gy, int16_t gz,int16_t ax,int16_t ay,int16_t az){
     if (Cf != Cr){
-        if(m_Calibration.M_B[0]==0.0 && m_Calibration.M_B[1] == 0.0 && m_Calibration.M_B[2] == 0.0)
-            CalibrateMag(mx,my,mz);
-        else
-            CalibrateGyro(gx,gy,gz);
+        // if(m_Calibration.M_B[0]==0.0 && m_Calibration.M_B[1] == 0.0 && m_Calibration.M_B[2] == 0.0)
+        //     CalibrateMag(mx,my,mz);
+        // else
+            CalibrateGyro(gx,gy,gz,ax,ay,az);
     }else{
         Cr += CaliSamples / 4;
         if (Cr > CaliSamples || Cf >= CaliSamples)
@@ -371,12 +367,17 @@ void QMI8658Sensor::AutoCalibrateGyro(int16_t gx, int16_t gy, int16_t gz, int16_
         }
     }
 }
-void QMI8658Sensor::CalibrateGyro(int16_t gx, int16_t gy, int16_t gz)
+void QMI8658Sensor::CalibrateGyro(int16_t gx, int16_t gy, int16_t gz, int16_t acx, int16_t acy, int16_t acz, uint8_t save)
 {
-    Cx[Cf] = gx;
-    Cy[Cf] = gy;
-    Cz[Cf] = gz;
-    Cf++;
+    if (abs(prevM[0] - acx) < AccTolerance*10 && abs(prevM[1] - acy) < AccTolerance*10 && abs(prevM[2] - acz) < AccTolerance*10){
+        Cx[Cf] = gx;
+        Cy[Cf] = gy;
+        Cz[Cf] = gz;
+        Cf++;
+    }
+    prevM[0] = acx;
+    prevM[1] = acy;
+    prevM[2] = acz;
     if (Cf == Cr)
     {
         // m_Logger.debug("Gyro Samples Collected : X: %f Y:%f Z:%f",Gbias[0],Gbias[1],Gbias[2]);
@@ -399,17 +400,17 @@ void QMI8658Sensor::CalibrateGyro(int16_t gx, int16_t gy, int16_t gz)
             az += Cz[i] - m_Calibration.G_off[2];
             m_Calibration.temperature = getTemperature();
         }
-        if (abs(ax) < (0.0003 * CaliSamples/gscale) && abs(ay) <  0.0003 * CaliSamples/gscale && abs(az) < 0.0003 * CaliSamples/gscale
+        if (abs(ax) < (0.001 * CaliSamples/gscale) && abs(ay) <  0.001 * CaliSamples/gscale && abs(az) < 0.001 * CaliSamples/gscale
             && vx < sq(GyroTolerance) * (CaliSamples - 1) && vy < sq(GyroTolerance) * (CaliSamples - 1) && vz < sq(GyroTolerance) * (CaliSamples - 1)){
                 SlimeVR::Configuration::CalibrationConfig calibration;
                 calibration.type = SlimeVR::Configuration::CalibrationConfigType::QMI8658;
                 calibration.data.qmi8658 = m_Calibration;
-                // SlimeVR::Configuration::QMI8658CalibrationConfig o_Calibration = configuration.getCalibration(sensorId).data.qmi8658;
-                // if(abs(o_Calibration.G_off[0]-m_Calibration.G_off[0])> (0.004 /gscale)||abs(o_Calibration.G_off[1]-m_Calibration.G_off[1])> (0.004 /gscale)||abs(o_Calibration.G_off[2]-m_Calibration.G_off[2])> (0.004 /gscale))
-                // {
-                    configuration.setCalibration(sensorId, calibration);
+                SlimeVR::Configuration::QMI8658CalibrationConfig o_Calibration = configuration.getCalibration(sensorId).data.qmi8658;
+                configuration.setCalibration(sensorId, calibration);
+                if(save)
+                {
                     configuration.save(sensorId);
-                // }
+                }
                 return;
             }
         // m_Logger.debug("Gyro Calibration Failed : %f/%f/%f/%f/%f/%f",ax,ay,az,vx,vy,vz);
@@ -625,20 +626,46 @@ bool QMI8658Sensor::verifyMagAccCali(SlimeVR::Configuration::QMI8658CalibrationC
 
 void QMI8658Sensor::startCalibration(int calibrationType) {
     linearAcceleration[0]=linearAcceleration[1]=linearAcceleration[2]=0.0;
+    int16_t fifoCnt;
+    uint8_t buffer[120];
     while(Cf!=Cr){
-        int16_t gx,gy,gz;
-        imu.getGyro(&gx,&gy,&gz);
-        CalibrateGyro(gx,gy,gz);
-        delay(20);
+        int16_t ax,ay,az,gx,gy,gz;
+        fifoCnt = imu.getFIFOCount()-12;
+        if(fifoCnt>120) fifoCnt=120;
+        imu.getFIFOBytes(buffer,fifoCnt);
+            // Serial.printf("Status : %x Cnt : %d\n",fifoStatus, fifoCnt);
+        for(uint8_t i=0;i<fifoCnt/12;i++){
+            ax = buffer[i*12+0]|buffer[i*12+1]<<8;
+            ay = buffer[i*12+2]|buffer[i*12+3]<<8;
+            az = buffer[i*12+4]|buffer[i*12+5]<<8;
+            gx = buffer[i*12+6]|buffer[i*12+7]<<8;
+            gy = buffer[i*12+8]|buffer[i*12+9]<<8;
+            gz = buffer[i*12+10]|buffer[i*12+11]<<8;
+            CalibrateGyro(gx,gy,gz,ax,ay,az,1);
+            if(Cf==Cr) break;
+        }
+        delay(10);
     }
     m_Logger.debug("Gathering accelerometer data...");
     Cf=0; Cr=CaliSamples-1;
     accelDupCnt = 0;
     while(Cf!=Cr){
         int16_t ax,ay,az,gx,gy,gz;
-        imu.getMotion6(&ax,&ay,&az,&gx,&gy,&gz);
-        CalibrateAcc(ax,ay,az,gx,gy,gz);
-        delay(50);
+        fifoCnt = imu.getFIFOCount()-12;
+        if(fifoCnt>120) fifoCnt=120;
+        imu.getFIFOBytes(buffer,fifoCnt);
+            // Serial.printf("Status : %x Cnt : %d\n",fifoStatus, fifoCnt);
+        for(uint8_t i=0;i<fifoCnt/12;i++){
+            ax = buffer[i*12+0]|buffer[i*12+1]<<8;
+            ay = buffer[i*12+2]|buffer[i*12+3]<<8;
+            az = buffer[i*12+4]|buffer[i*12+5]<<8;
+            gx = buffer[i*12+6]|buffer[i*12+7]<<8;
+            gy = buffer[i*12+8]|buffer[i*12+9]<<8;
+            gz = buffer[i*12+10]|buffer[i*12+11]<<8;
+            CalibrateAcc(ax,ay,az,gx,gy,gz);
+            if(Cf==Cr) break;
+        }
+        delay(10);
     }
     Cf=0; Cr=CaliSamples-1;
     while(Cf!=Cr){

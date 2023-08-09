@@ -32,13 +32,16 @@
 // #include <ekf.h>
 
 #define CaliSamples 180
-#define GyroTolerance 3
+#define GyroTolerance 30
 #define MagTolerance 250
 #define AccTolerance 30
 
 #define QMI8658_TIMESTAMP_RESOLUTION_MICROS 1.0f
 #define QMI8658_MAP_ODR_MICROS(micros) ((uint16_t)((micros) / QMI8658_TIMESTAMP_RESOLUTION_MICROS) * QMI8658_TIMESTAMP_RESOLUTION_MICROS)
-constexpr float QMI8658_ODR_HZ = 58.75f;
+// constexpr float QMI8658_ODR_HZ = 58.75f;//QMI8658C
+constexpr float QMI8658_ODR_HZ = 56.05f;//QMI8658A
+// #define QMI8658_USE_TEMPCAL true
+
 constexpr float QMI8658_ODR_MICROS = 1.0f / QMI8658_ODR_HZ * 1e6f;
 
 struct QMI8658VQFParams: VQFParams {
@@ -62,8 +65,8 @@ public:
     void motionLoop() override final;
     float getTemperature();
     void getValueScaled();
-    void AutoCalibrateGyro(int16_t gx, int16_t gy, int16_t gz, int16_t mx, int16_t my, int16_t mz);
-    void CalibrateGyro(int16_t gx, int16_t gy, int16_t gz);
+    void AutoCalibrateGyro(int16_t gx, int16_t gy, int16_t gz,int16_t ax, int16_t ay, int16_t az);
+    void CalibrateGyro(int16_t gx, int16_t gy, int16_t gz, int16_t acx, int16_t acy, int16_t acz, uint8_t save = 0);
     void CalibrateMag(int16_t mx, int16_t my, int16_t mz);
     void CalibrateAcc(int16_t ax, int16_t ay, int16_t az, int16_t gx, int16_t gy, int16_t gz);
     void startCalibration(int calibrationType);
