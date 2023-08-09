@@ -27,7 +27,7 @@
 #include "sensor.h"
 #include "logging/Logger.h"
 
-#include <MPU9250MotionApps.h>
+#include <MPU9250_6Axis_MotionApps_V6_12.h>
 
 class MPU9250Sensor : public Sensor
 {

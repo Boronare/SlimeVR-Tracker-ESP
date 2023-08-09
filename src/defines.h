@@ -26,16 +26,15 @@
 // ================================================
 
 // Set parameters of IMU and board used
-#define IMU IMU_QMI8658
+#define IMU IMU_BMI160
 #define SECOND_IMU IMU
-// #define BOARD BOARD_CUSTOM
-#define BOARD BOARD_SLIMEVR_LEGACY
-#define IMU_ROTATION DEG_270
-#define SECOND_IMU_ROTATION DEG_90
+#define BOARD BOARD_CUSTOM
+#define IMU_ROTATION DEG_90
+#define SECOND_IMU_ROTATION DEG_270
 
 // Battery monitoring options (comment to disable):
-//   BAT_EXTERNAL for ADC pin,
-//   BAT_INTERNAL for internal - can detect only low battery,
+//   BAT_EXTERNAL for ADC pin, 
+//   BAT_INTERNAL for internal - can detect only low battery, 
 //   BAT_MCP3021 for external ADC connected over I2C
 #define BATTERY_MONITOR BAT_EXTERNAL
 
@@ -44,7 +43,7 @@
 // For other boards you can now adjust the other resistor values.
 // The diagram looks like this:
 //   (Battery)--- [BATTERY_SHIELD_RESISTANCE] ---(INPUT_BOARD)---  [BATTERY_SHIELD_R2] ---(ESP32_INPUT)--- [BATTERY_SHIELD_R1] --- (GND)
-// #define BATTERY_SHIELD_RESISTANCE 110 // 130k BatteryShield, 180k SlimeVR or fill in external resistor value in kOhm
+// #define BATTERY_SHIELD_RESISTANCE 180 //130k BatteryShield, 180k SlimeVR or fill in external resistor value in kOhm
 // #define BATTERY_SHIELD_R1 100 // Board voltage divider resistor Ain to GND in kOhm
 // #define BATTERY_SHIELD_R2 220 // Board voltage divider resistor Ain to INPUT_BOARD in kOhm
 
@@ -56,7 +55,7 @@
 //   LED_PIN
 //     - Number or Symbol (D1,..) of the Output
 //     - To turn off the LED, set LED_PIN to LED_OFF
-//   LED_INVERTED
+//   LED_INVERTED 
 //     - false for output 3.3V on high
 //     - true for pull down to GND on high
 
@@ -90,17 +89,17 @@
     #define BATTERY_SHIELD_RESISTANCE 0
   #endif
   #ifndef BATTERY_SHIELD_R1 
-    #define BATTERY_SHIELD_R1 100
+    #define BATTERY_SHIELD_R1 10
   #endif
   #ifndef BATTERY_SHIELD_R2
-    #define BATTERY_SHIELD_R2 330
+    #define BATTERY_SHIELD_R2 40.2
   #endif
 #elif BOARD == BOARD_NODEMCU || BOARD == BOARD_WEMOSD1MINI
-#define PIN_IMU_SDA D1
-#define PIN_IMU_SCL D2
-#define PIN_IMU_INT D5
-#define PIN_IMU_INT_2 D6
-#define PIN_BATTERY_LEVEL A0
+  #define PIN_IMU_SDA D2
+  #define PIN_IMU_SCL D1
+  #define PIN_IMU_INT D5
+  #define PIN_IMU_INT_2 D6
+  #define PIN_BATTERY_LEVEL A0
 //  #define LED_PIN 2
 //  #define LED_INVERTED true
   #ifndef BATTERY_SHIELD_RESISTANCE
@@ -113,57 +112,68 @@
     #define BATTERY_SHIELD_R2 220
   #endif
 #elif BOARD == BOARD_ESP01
-#define PIN_IMU_SDA 2
-#define PIN_IMU_SCL 0
-#define PIN_IMU_INT 255
-#define PIN_IMU_INT_2 255
-#define PIN_BATTERY_LEVEL 255
-#define LED_PIN LED_OFF
-#define LED_INVERTED false
+  #define PIN_IMU_SDA 2
+  #define PIN_IMU_SCL 0
+  #define PIN_IMU_INT 255
+  #define PIN_IMU_INT_2 255
+  #define PIN_BATTERY_LEVEL 255
+  #define LED_PIN LED_OFF
+  #define LED_INVERTED false
 #elif BOARD == BOARD_TTGO_TBASE
-#define PIN_IMU_SDA 5
-#define PIN_IMU_SCL 4
-#define PIN_IMU_INT 14
-#define PIN_IMU_INT_2 13
-#define PIN_BATTERY_LEVEL A0
+  #define PIN_IMU_SDA 5
+  #define PIN_IMU_SCL 4
+  #define PIN_IMU_INT 14
+  #define PIN_IMU_INT_2 13
+  #define PIN_BATTERY_LEVEL A0
 //  #define LED_PIN 2
 //  #define LED_INVERTED false
 #elif BOARD == BOARD_CUSTOM
-#define PIN_IMU_SDA 12
-#define PIN_IMU_SCL 13
-#define PIN_IMU_INT 16
-#define PIN_IMU_INT_2 16
-#define PIN_BATTERY_LEVEL A0
+  #define PIN_IMU_SDA 4
+  #define PIN_IMU_SCL 5
+  #define PIN_IMU_INT 10
+  #define PIN_IMU_INT_2 13
+  #define PIN_BATTERY_LEVEL 17
+  #define LED_PIN 2
+  #define LED_INVERTED true
+  #ifndef BATTERY_SHIELD_RESISTANCE
+    #define BATTERY_SHIELD_RESISTANCE 0
+  #endif
+  #ifndef BATTERY_SHIELD_R1 
+    #define BATTERY_SHIELD_R1 100
+  #endif
+  #ifndef BATTERY_SHIELD_R2
+    #define BATTERY_SHIELD_R2 330
+  #endif
 #elif BOARD == BOARD_WROOM32
-#define PIN_IMU_SDA 9
-#define PIN_IMU_SCL 8
-#define PIN_IMU_INT 23
-#define PIN_IMU_INT_2 25
-#define PIN_BATTERY_LEVEL 36
+  #define PIN_IMU_SDA 21
+  #define PIN_IMU_SCL 22
+  #define PIN_IMU_INT 23
+  #define PIN_IMU_INT_2 25
+  #define PIN_BATTERY_LEVEL 36
 //  #define LED_PIN 2
 //  #define LED_INVERTED false
 #elif BOARD == BOARD_LOLIN_C3_MINI
-#define PIN_IMU_SDA 5
-#define PIN_IMU_SCL 4
-#define PIN_IMU_INT 6
-#define PIN_IMU_INT_2 8
-#define PIN_BATTERY_LEVEL 3
-#define LED_PIN 7
+  #define PIN_IMU_SDA 5
+  #define PIN_IMU_SCL 4
+  #define PIN_IMU_INT 6
+  #define PIN_IMU_INT_2 8
+  #define PIN_BATTERY_LEVEL 3
+  #define LED_PIN 7
 //  #define LED_INVERTED false
 #elif BOARD == BOARD_BEETLE32C3
-#define PIN_IMU_SDA 8
-#define PIN_IMU_SCL 9
-#define PIN_IMU_INT 6
-#define PIN_IMU_INT_2 7
-#define PIN_BATTERY_LEVEL 3
-#define LED_PIN 10
-#define LED_INVERTED false
+  #define PIN_IMU_SDA 8
+  #define PIN_IMU_SCL 9
+  #define PIN_IMU_INT 6
+  #define PIN_IMU_INT_2 7
+  #define PIN_BATTERY_LEVEL 3
+  #define LED_PIN 10
+  #define LED_INVERTED false
 #elif BOARD == BOARD_ES32C3DEVKITM1
-#define PIN_IMU_SDA 5
-#define PIN_IMU_SCL 4
-#define PIN_IMU_INT 6
-#define PIN_IMU_INT_2 7
-#define PIN_BATTERY_LEVEL 3
-#define LED_PIN LED_OFF // RGB LED Protocol would need to be implementetet did not brother for the test, because the board ideal for tracker ifself
+  #define PIN_IMU_SDA 5
+  #define PIN_IMU_SCL 4
+  #define PIN_IMU_INT 6
+  #define PIN_IMU_INT_2 7
+  #define PIN_BATTERY_LEVEL 3
+  #define LED_PIN LED_OFF  // RGB LED Protocol would need to be implementetet did not brother for the test, because the board ideal for tracker ifself
 //  #define LED_INVERTED false
 #endif

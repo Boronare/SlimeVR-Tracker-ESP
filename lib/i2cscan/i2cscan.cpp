@@ -20,10 +20,8 @@ namespace I2CSCAN
 {
 
     uint8_t pickDevice(uint8_t addr1, uint8_t addr2, bool scanIfNotFound) {
-        Serial.printf("I2C: Looking for device on 0x%2x...\n",addr1);
         if(I2CSCAN::isI2CExist(addr1))
             return addr1;
-        Serial.printf("I2C: Can't find... Looking for Secondary device on 0x%2x...\n",addr2);
         if(!I2CSCAN::isI2CExist(addr2)) {
             if(scanIfNotFound) {
                 Serial.println("[ERR] I2C: Can't find I2C device on provided addresses, scanning for all I2C devices and returning");

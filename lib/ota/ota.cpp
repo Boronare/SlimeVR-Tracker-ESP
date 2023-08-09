@@ -57,7 +57,6 @@ void OTA::otaSetup(const char * const otaPassword) {
         else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
         else if (error == OTA_END_ERROR) Serial.println("End Failed");
     });
-    ArduinoOTA.setHostname("SlimeVR");
     ArduinoOTA.begin();
 
     Serial.println("[NOTICE] OTA updates allowed");

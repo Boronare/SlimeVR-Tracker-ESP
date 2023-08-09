@@ -40,7 +40,7 @@
     #if USE_6_AXIS
         #define BMI160_GYRO_RATE BMI160_GYRO_RATE_400HZ
     #else
-        #define BMI160_GYRO_RATE BMI160_GYRO_RATE_200HZ
+        #define BMI160_GYRO_RATE BMI160_GYRO_RATE_50HZ
     #endif
 #else
     #if USE_6_AXIS
@@ -52,7 +52,7 @@
 #define BMI160_GYRO_RANGE BMI160_GYRO_RANGE_1000
 #define BMI160_GYRO_FILTER_MODE BMI160_DLPF_MODE_NORM
 
-#define BMI160_ACCEL_RATE BMI160_ACCEL_RATE_100HZ
+#define BMI160_ACCEL_RATE BMI160_ACCEL_RATE_50HZ
 #define BMI160_ACCEL_RANGE BMI160_ACCEL_RANGE_4G
 #define BMI160_ACCEL_FILTER_MODE BMI160_DLPF_MODE_NORM
 
@@ -167,6 +167,7 @@ class BMI160Sensor : public Sensor {
         ~BMI160Sensor(){};
         void initHMC(BMI160MagRate magRate);
         void initQMC(BMI160MagRate magRate);
+        void initMMC();
 
         void motionSetup() override final;
         void motionLoop() override final;

@@ -38,7 +38,6 @@ THE SOFTWARE.
 #define _MPU9250_H_
 
 #include "I2Cdev.h"
-#include "i2cscan.h"
 #include "helper_3dmath.h"
 
 #if (defined(__AVR__) || defined(ESP8266))

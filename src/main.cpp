@@ -23,23 +23,22 @@
 
 #include "Wire.h"
 #include "ota.h"
-#include "sensors/SensorManager.h"
-#include "configuration/Configuration.h"
-#include "network/network.h"
+#include "GlobalVars.h"
 #include "globals.h"
 #include "credentials.h"
 #include <i2cscan.h>
 #include "serial/serialcommands.h"
-#include "LEDManager.h"
-#include "status/StatusManager.h"
 #include "batterymonitor.h"
 #include "logging/Logger.h"
 
+Timer<> globalTimer;
 SlimeVR::Logging::Logger logger("SlimeVR");
 SlimeVR::Sensors::SensorManager sensorManager;
 SlimeVR::LEDManager ledManager(LED_PIN);
 SlimeVR::Status::StatusManager statusManager;
 SlimeVR::Configuration::Configuration configuration;
+SlimeVR::Network::Manager networkManager;
+SlimeVR::Network::Connection networkConnection;
 
 int sensorToCalibrate = -1;
 bool blinking = false;
@@ -52,8 +51,9 @@ BatteryMonitor battery;
 void setup()
 {
     Serial.begin(serialBaudRate);
+    globalTimer = timer_create_default();
 
-#ifdef ESP32C3 
+#ifdef ESP32C3
     // Wait for the Computer to be able to connect.
     delay(2000);
 #endif
@@ -71,7 +71,7 @@ void setup()
 
     SerialCommands::setUp();
 
-#if IMU == IMU_MPU6500 || IMU == IMU_MPU6050 || IMU == IMU_MPU9250 || IMU == IMU_BNO055 || IMU == IMU_ICM20948 || IMU == IMU_BMI160 || IMU == IMU_QMI8658
+#if IMU == IMU_MPU6500 || IMU == IMU_MPU6050 || IMU == IMU_MPU9250 || IMU == IMU_BNO055 || IMU == IMU_ICM20948 || IMU == IMU_BMI160
     I2CSCAN::clearBus(PIN_IMU_SDA, PIN_IMU_SCL); // Make sure the bus isn't stuck when resetting ESP without powering it down
     // Fixes I2C issues for certain IMUs. Only has been tested on IMUs above. Testing advised when adding other IMUs.
 #endif
@@ -83,7 +83,7 @@ void setup()
 #endif
 
     // using `static_cast` here seems to be better, because there are 2 similar function signatures
-    Wire.begin(static_cast<int>(PIN_IMU_SDA), static_cast<int>(PIN_IMU_SCL)); 
+    Wire.begin(static_cast<int>(PIN_IMU_SDA), static_cast<int>(PIN_IMU_SCL));
 
 #ifdef ESP8266
     Wire.setClockStretchLimit(150000L); // Default stretch limit 150mS
@@ -94,11 +94,11 @@ void setup()
     Wire.setClock(I2C_SPEED);
 
     // Wait for IMU to boot
-    delay(2000);
-    
+    delay(500);
+
     sensorManager.setup();
-    
-    Network::setUp();
+
+    networkManager.setup();
     OTA::otaSetup(otaPassword);
     battery.Setup();
 
@@ -111,9 +111,10 @@ void setup()
 
 void loop()
 {
+    globalTimer.tick();
     SerialCommands::update();
     OTA::otaUpdate();
-    Network::update(sensorManager.getFirst(), sensorManager.getSecond());
+    networkManager.update();
     sensorManager.update();
     battery.Loop();
     ledManager.update();

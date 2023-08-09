@@ -21,32 +21,30 @@
     THE SOFTWARE.
 */
 #include "sensor.h"
-#include "network/network.h"
+#include "GlobalVars.h"
 #include <i2cscan.h>
 #include "calibration.h"
 
-uint8_t Sensor::getSensorState()
-{
+SensorStatus Sensor::getSensorState() {
     return isWorking() ? SensorStatus::SENSOR_OK : SensorStatus::SENSOR_OFFLINE;
 }
 
-void Sensor::sendData()
-{
-    if (newData)
-    {
-        newData = false;
-        Network::sendRotationData(&quaternion, DATA_TYPE_NORMAL, calibrationAccuracy, sensorId);
-
-#if SEND_ACCELERATION
-        {
-            Network::sendAccel(linearAcceleration, sensorId);
-        }
-#endif
+void Sensor::sendData() {
+    if(newFusedRotation) {
+        newFusedRotation = false;
+        networkConnection.sendRotationData(sensorId, &fusedRotation, DATA_TYPE_NORMAL, calibrationAccuracy);
 
 #ifdef DEBUG_SENSOR
         m_Logger.trace("Quaternion: %f, %f, %f, %f", UNPACK_QUATERNION(quaternion));
 #endif
     }
+
+#if SEND_ACCELERATION
+    if(newAcceleration) {
+        newAcceleration = false;
+        networkConnection.sendSensorAcceleration(sensorId, acceleration);
+    }
+#endif
 }
 
 void Sensor::printTemperatureCalibrationUnsupported() {

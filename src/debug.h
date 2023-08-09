@@ -25,8 +25,8 @@
 #include "consts.h"
 #include "logging/Level.h"
 
-#define IMU_MPU6050_RUNTIME_CALIBRATION       // Comment to revert to startup/traditional-calibration
-#define BNO_USE_ARVR_STABILIZATION true       // Set to false to disable stabilization for BNO085+ IMUs
+#define IMU_MPU6050_RUNTIME_CALIBRATION // Comment to revert to startup/traditional-calibration
+#define BNO_USE_ARVR_STABILIZATION true // Set to false to disable stabilization for BNO085+ IMUs
 #define BNO_USE_MAGNETOMETER_CORRECTION false // Set to true to enable magnetometer correction for BNO08x IMUs. Only works with USE_6_AXIS set to true.
 #define USE_6_AXIS false // uses 9 DoF (with mag) if false (only for ICM-20948 and BNO0xx currently)
 #define LOAD_BIAS true // Loads the bias values from NVS on start
@@ -35,14 +35,14 @@
 #define ENABLE_TAP false // monitor accel for (triple) tap events and send them. Uses more cpu, disable if problems. Server does nothing with value so disabled atm
 #define SEND_ACCELERATION true // send linear acceleration to the server
 
-// Debug information
+//Debug information
 
-#define LOG_LEVEL LOG_LEVEL_INFO
+#define LOG_LEVEL LOG_LEVEL_DEBUG
 
 #if LOG_LEVEL == LOG_LEVEL_TRACE
-#define DEBUG_SENSOR
-#define DEBUG_NETWORK
-#define DEBUG_CONFIGURATION
+    #define DEBUG_SENSOR
+    #define DEBUG_NETWORK
+    #define DEBUG_CONFIGURATION
 #endif
 
 #define serialDebug false // Set to true to get Serial output for debugging
@@ -54,17 +54,17 @@
 #define samplingRateInMillis 20
 
 // Sleeping options
-#define POWERSAVING_MODE POWER_SAVING_MODERATE // Minimum causes sporadic data pauses
+#define POWERSAVING_MODE POWER_SAVING_LEGACY  // Minimum causes sporadic data pauses
 #if POWERSAVING_MODE >= POWER_SAVING_MINIMUM
-#define TARGET_LOOPTIME_MICROS (samplingRateInMillis * 1000)
+    #define TARGET_LOOPTIME_MICROS (samplingRateInMillis * 1000)
 #endif
 
 // Setup for the Magnetometer
-#define useFullCalibrationMatrix false
+#define useFullCalibrationMatrix true
 
 // Battery configuration
 #define batterySampleRate 10000
-#define BATTERY_LOW_VOLTAGE_DEEP_SLEEP true
+#define BATTERY_LOW_VOLTAGE_DEEP_SLEEP false
 #define BATTERY_LOW_POWER_VOLTAGE 3.3f // Voltage to raise error
 
 // Send updates over network only when changes are substantial

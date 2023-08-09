@@ -19,7 +19,6 @@
 */
 
 #include "icm42688sensor.h"
-#include "network/network.h"
 #include "globals.h"
 #include "helper_3dmath.h"
 #include <i2cscan.h>
@@ -171,13 +170,13 @@ void ICM42688Sensor::motionLoop() {
         #endif
     }
     
-    quaternion.set(-q[2], q[1], q[3], q[0]);
+    fusedRotation.set(-q[2], q[1], q[3], q[0]);
 
-    quaternion *= sensorOffset;
+    fusedRotation *= sensorOffset;
 
-    if(!lastQuatSent.equalsWithEpsilon(quaternion)) {
-        newData = true;
-        lastQuatSent = quaternion;
+    if(!lastFusedRotationSent.equalsWithEpsilon(fusedRotation)) {
+        newFusedRotation = true;
+        lastFusedRotationSent = fusedRotation;
     }
 }
 
@@ -309,7 +308,6 @@ void ICM42688Sensor::startCalibration(int calibrationType) {
     configuration.save();
 
     ledManager.off();
-    Network::sendCalibrationFinished(CALIBRATION_TYPE_EXTERNAL_ALL, 0);
     m_Logger.debug("Saved the calibration data");
 
     m_Logger.info("Calibration data gathered");

@@ -23,7 +23,6 @@
 
 #include "SensorManager.h"
 #include <i2cscan.h>
-#include "network/network.h"
 // #include "bno055sensor.h"
 // #include "bno080sensor.h"
 // #include "mpu9250sensor.h"
@@ -33,6 +32,7 @@
 #include "qmi8658sensor.h"
 #include "ErroneousSensor.h"
 #include "sensoraddresses.h"
+#include "GlobalVars.h"
 
 namespace SlimeVR
 {
@@ -137,7 +137,7 @@ namespace SlimeVR
             m_Sensor1->motionLoop();
             m_Sensor2->motionLoop();
 
-            if (!ServerConnection::isConnected())
+            if (!networkConnection.isConnected())
             {
                 return;
             }
