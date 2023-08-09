@@ -91,6 +91,41 @@ void BMI160Sensor::initQMC(BMI160MagRate magRate) {
     imu.setRegister(BMI160_RA_MAG_IF_1_MODE, BMI160_MAG_DATA_MODE_6);
 }
 
+void BMI160Sensor::initMMC(){    /* Configure MAG interface and setup mode */
+    /* Set MAG interface normal power mode */
+    imu.setRegister(BMI160_RA_CMD, BMI160_CMD_MAG_MODE_NORMAL);
+    delay(60);
+
+    imu.setRegister(BMI160_RA_CMD, BMI160_EN_PULL_UP_REG_1);
+    imu.setRegister(BMI160_RA_CMD, BMI160_EN_PULL_UP_REG_2);
+    imu.setRegister(BMI160_RA_CMD, BMI160_EN_PULL_UP_REG_3);
+    imu.setRegister(BMI160_7F, BMI160_EN_PULL_UP_REG_4);
+    imu.setRegister(BMI160_7F, BMI160_EN_PULL_UP_REG_5);
+
+    /* Enable MAG interface */
+    imu.setRegister(BMI160_RA_IF_CONF, BMI160_IF_CONF_MODE_PRI_AUTO_SEC_MAG);
+    delay(1);
+
+    imu.setMagDeviceAddress(0x30);
+    delay(3);
+    imu.setRegister(BMI160_RA_MAG_IF_1_MODE, BMI160_MAG_SETUP_MODE);
+    delay(3);
+
+    /* Configure MMC5603NJ Sensor */
+    imu.setMagRegister(0x1C, 0x02);
+    delay(3);
+    imu.setMagRegister(0x1A, 50);
+    delay(3);
+    imu.setMagRegister(0x1B, 0xA0);
+    delay(3);
+    imu.setMagRegister(0x1D, 0x1B);
+
+    imu.setRegister(BMI160_RA_MAG_IF_2_READ_RA, 0x00);
+    imu.setRegister(BMI160_RA_MAG_CONF, 7);
+    delay(3);
+    imu.setRegister(BMI160_RA_MAG_IF_1_MODE, BMI160_MAG_DATA_MODE_6);
+}
+
 void BMI160Sensor::motionSetup() {
     // initialize device
     imu.initialize(
@@ -107,6 +142,8 @@ void BMI160Sensor::motionSetup() {
             initHMC(BMI160_MAG_RATE);
         #elif BMI160_MAG_TYPE == BMI160_MAG_TYPE_QMC
             initQMC(BMI160_MAG_RATE);
+        #elif BMI160_MAG_TYPE == BMI160_MAG_TYPE_MMC
+            initMMC();
         #else
             static_assert(false, "Mag is enabled but BMI160_MAG_TYPE not set in defines");
         #endif
@@ -147,7 +184,7 @@ void BMI160Sensor::motionSetup() {
         ledManager.on();
 
         m_Logger.info("Flip front to confirm start calibration");
-        delay(5000);
+        ledManager.pattern(500,500,5);
         getRemappedAcceleration(&ax, &ay, &az);
         g_az = (float)az / BMI160_ACCEL_TYPICAL_SENSITIVITY_LSB;
         if (g_az > 0.75f) {
@@ -360,7 +397,7 @@ void BMI160Sensor::motionLoop() {
 
     {
         uint32_t now = micros();
-        constexpr float maxSendRateHz = 2.0f;
+        constexpr float maxSendRateHz = 0.5f;
         constexpr uint32_t sendInterval = 1.0f/maxSendRateHz * 1e6;
         uint32_t elapsed = now - lastTemperaturePacketSent;
         if (elapsed >= sendInterval) {
@@ -411,11 +448,11 @@ void BMI160Sensor::motionLoop() {
             linAccel.x = lastAxyz[0] - vecGravity[0] * CONST_EARTH_GRAVITY;
             linAccel.y = lastAxyz[1] - vecGravity[1] * CONST_EARTH_GRAVITY;
             linAccel.z = lastAxyz[2] - vecGravity[2] * CONST_EARTH_GRAVITY;
-
+            if(abs(linAccel.x-acceleration[0])+abs(linAccel.x-acceleration[1])+abs(linAccel.x-acceleration[2])>0.2)
+                newAcceleration = true;
             acceleration[0] = linAccel.x;
             acceleration[1] = linAccel.y;
             acceleration[2] = linAccel.z;
-            newAcceleration = true;
 
             fusedRotation *= sensorOffset;
 
@@ -590,6 +627,7 @@ void BMI160Sensor::onGyroRawSample(uint32_t dtMicros, int16_t x, int16_t y, int1
         Gxyz[2] = gyroCalibratedStatic[2];
     }
     remapGyroAccel(&Gxyz[0], &Gxyz[1], &Gxyz[2]);
+    Serial.printf("G:%3d %3d %3d %+f %+f %+f %+f %+f %+f\n",x,y,z,Gxyz[0],Gxyz[1],Gxyz[2],GOxyz[0],GOxyz[1],GOxyz[2]);
 
     #if !BMI160_VQF_REST_DETECTION_AVAILABLE
         restDetection.updateGyr(dtMicros, Gxyz);
@@ -818,7 +856,7 @@ void BMI160Sensor::maybeCalibrateGyro() {
     #endif
 
     // Wait for sensor to calm down before calibration
-    constexpr uint8_t GYRO_CALIBRATION_DELAY_SEC = 3;
+    constexpr uint8_t GYRO_CALIBRATION_DELAY_SEC = 0;
     constexpr float GYRO_CALIBRATION_DURATION_SEC = BMI160_CALIBRATION_GYRO_SECONDS;
     m_Logger.info("Put down the device and wait for baseline gyro reading calibration (%.1f seconds)", GYRO_CALIBRATION_DURATION_SEC);
     ledManager.on();
@@ -886,7 +924,7 @@ void BMI160Sensor::maybeCalibrateAccel() {
     #elif BMI160_ACCEL_CALIBRATION_METHOD == ACCEL_CALIBRATION_METHOD_6POINT
         m_Logger.info("Put the device into 6 unique orientations (all sides), leave it still and do not hold/touch for 3 seconds each");
     #endif
-    constexpr uint8_t ACCEL_CALIBRATION_DELAY_SEC = 3;
+    constexpr uint8_t ACCEL_CALIBRATION_DELAY_SEC = 0;
     ledManager.on();
     for (uint8_t i = ACCEL_CALIBRATION_DELAY_SEC; i > 0; i--) {
         m_Logger.info("%i...", i);
@@ -912,7 +950,7 @@ void BMI160Sensor::maybeCalibrateAccel() {
         m_Logger.debug("Calculating accelerometer calibration data...");
     #elif BMI160_ACCEL_CALIBRATION_METHOD == ACCEL_CALIBRATION_METHOD_6POINT
         RestDetectionParams calibrationRestDetectionParams;
-        calibrationRestDetectionParams.restMinTimeMicros = 3 * 1e6;
+        calibrationRestDetectionParams.restMinTimeMicros = 1 * 1e6;
         calibrationRestDetectionParams.restThAcc = 0.25f;
         RestDetection calibrationRestDetection(
             calibrationRestDetectionParams,
@@ -1106,5 +1144,11 @@ void BMI160Sensor::getMagnetometerXYZFromBuffer(uint8_t* data, int16_t* x, int16
         *x = ((int16_t)data[1] << 8) | data[0];
         *y = ((int16_t)data[3] << 8) | data[2];
         *z = ((int16_t)data[5] << 8) | data[4];
+    #elif BMI160_MAG_TYPE == BMI160_MAG_TYPE_MMC
+        // qmc5883l -> 0 lsb 1 msb
+        // XYZ order
+        *x = (((uint16_t)data[0] << 8) | data[1])-32768;
+        *y = (((uint16_t)data[2] << 8) | data[3])-32768;
+        *z = (((uint16_t)data[4] << 8) | data[5])-32768;
     #endif
 }

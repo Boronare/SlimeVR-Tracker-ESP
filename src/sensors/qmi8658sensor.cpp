@@ -1,5 +1,4 @@
 #include "qmi8658sensor.h"
-#include "network/network.h"
 #include "mahony.h"
 #include "GlobalVars.h"
 #include "magneto1.4.h"
@@ -128,11 +127,12 @@ void QMI8658Sensor::getValueScaled()
             Axyz[1] = (float)ay;
             Axyz[2] = (float)az;
             #if useFullCalibrationMatrix == true
+                float tmp[3];
                 for (uint8_t i = 0; i < 3; i++)
-                    temp[i] = (Axyz[i] - m_Calibration.A_B[i])/ACCEL_SENSITIVITY_8G;
-                Axyz[0] = m_Calibration.A_Ainv[0][0] * temp[0] + m_Calibration.A_Ainv[0][1] * temp[1] + m_Calibration.A_Ainv[0][2] * temp[2];
-                Axyz[1] = m_Calibration.A_Ainv[1][0] * temp[0] + m_Calibration.A_Ainv[1][1] * temp[1] + m_Calibration.A_Ainv[1][2] * temp[2];
-                Axyz[2] = m_Calibration.A_Ainv[2][0] * temp[0] + m_Calibration.A_Ainv[2][1] * temp[1] + m_Calibration.A_Ainv[2][2] * temp[2];
+                    tmp[i] = (Axyz[i] - m_Calibration.A_B[i])/ACCEL_SENSITIVITY_8G;
+                Axyz[0] = m_Calibration.A_Ainv[0][0] * tmp[0] + m_Calibration.A_Ainv[0][1] * tmp[1] + m_Calibration.A_Ainv[0][2] * tmp[2];
+                Axyz[1] = m_Calibration.A_Ainv[1][0] * tmp[0] + m_Calibration.A_Ainv[1][1] * tmp[1] + m_Calibration.A_Ainv[1][2] * tmp[2];
+                Axyz[2] = m_Calibration.A_Ainv[2][0] * tmp[0] + m_Calibration.A_Ainv[2][1] * tmp[1] + m_Calibration.A_Ainv[2][2] * tmp[2];
             #else
                 for (uint8_t i = 0; i < 3; i++)
                     Axyz[i] = (Axyz[i] - m_Calibration.A_B[i])/ACCEL_SENSITIVITY_8G;
@@ -185,6 +185,7 @@ void QMI8658Sensor::getValueScaled()
                 Mxyz[1] = (float)my;
                 Mxyz[2] = (float)mz;
                 #if useFullCalibrationMatrix == true
+                    float temp[3];
                     for (i = 0; i < 3; i++)
                         temp[i] = (Mxyz[i] - m_Calibration.M_B[i]);
                     Mxyz[0] = m_Calibration.M_Ainv[0][0] * temp[0] + m_Calibration.M_Ainv[0][1] * temp[1] + m_Calibration.M_Ainv[0][2] * temp[2];
@@ -290,9 +291,9 @@ void QMI8658Sensor::motionLoop()
         lastTemperaturePacketSent = now - (elapsed - tSendInterval);
         #if BMI160_TEMPCAL_DEBUG
             uint32_t isCalibrating = gyroTempCalibrator->isCalibrating() ? 10000 : 0;
-            Network::sendTemperature(isCalibrating + 10000 + (gyroTempCalibrator->config.samplesTotal * 100) + temperature, sensorId);
+            networkConnection.sendTemperature(isCalibrating + 10000 + (gyroTempCalibrator->config.samplesTotal * 100) + temperature, sensorId);
         #else
-            Network::sendTemperature(temperature, sensorId);
+            networkConnection.sendTemperature(temperature, sensorId);
         #endif
         optimistic_yield(100);
     }
@@ -333,20 +334,20 @@ void QMI8658Sensor::motionLoop()
         grav[1] = (q[0] * q[1] + q[2] * q[3]) * 2;
         grav[2] = (sq(q[0]) - sq(q[1]) - sq(q[2]) + sq(q[3]));
 
-        quaternion = Quat(q[1],q[2],q[3],q[0]);
-        quaternion *= sensorOffset;
+        fusedRotation = Quat(q[1],q[2],q[3],q[0]);
+        fusedRotation *= sensorOffset;
         // Serial.printf("Axyz:%+f %+f %+f, Grav:%+f %+f %+f\n",Axyz[0],Axyz[1],Axyz[2],grav.x,grav.y,grav.z);
         #if SEND_ACCELERATION
         {
             // convert acceleration to m/s^2 (implicitly casts to float)
-            linearAcceleration[0] = (Axyz[0] - grav[0])*CONST_EARTH_GRAVITY;
-            linearAcceleration[1] = (Axyz[1] - grav[1])*CONST_EARTH_GRAVITY;
-            linearAcceleration[2] = (Axyz[2] - grav[2])*CONST_EARTH_GRAVITY;
+            acceleration[0] = (Axyz[0] - grav[0])*CONST_EARTH_GRAVITY;
+            acceleration[1] = (Axyz[1] - grav[1])*CONST_EARTH_GRAVITY;
+            acceleration[2] = (Axyz[2] - grav[2])*CONST_EARTH_GRAVITY;
         }
-        if (!lastQuatSent.equalsWithEpsilon(quaternion))
+        if (!lastFusedRotationSent.equalsWithEpsilon(fusedRotation))
         {
-            newData = true;
-            lastQuatSent = quaternion;
+            newFusedRotation = true;
+            lastFusedRotationSent = fusedRotation;
         }
     }
 #endif
@@ -624,7 +625,6 @@ bool QMI8658Sensor::verifyMagAccCali(SlimeVR::Configuration::QMI8658CalibrationC
 }
 
 void QMI8658Sensor::startCalibration(int calibrationType) {
-    linearAcceleration[0]=linearAcceleration[1]=linearAcceleration[2]=0.0;
     while(Cf!=Cr){
         int16_t gx,gy,gz;
         imu.getGyro(&gx,&gy,&gz);

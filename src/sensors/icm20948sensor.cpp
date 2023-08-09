@@ -350,10 +350,10 @@ void ICM20948Sensor::readRotation()
             fusedRotation.z = q3;
 
             #if SEND_ACCELERATION
-            calculateAccelerationWithoutGravity(&quaternion);
+            calculateAccelerationWithoutGravity(&fusedRotation);
             #endif
 
-            quaternion *= sensorOffset; //imu rotation
+            fusedRotation *= sensorOffset; //imu rotation
 
             newFusedRotation = true;
             lastData = millis();
