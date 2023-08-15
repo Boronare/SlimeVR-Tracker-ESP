@@ -627,7 +627,7 @@ void BMI160Sensor::onGyroRawSample(uint32_t dtMicros, int16_t x, int16_t y, int1
         Gxyz[2] = gyroCalibratedStatic[2];
     }
     remapGyroAccel(&Gxyz[0], &Gxyz[1], &Gxyz[2]);
-    Serial.printf("G:%3d %3d %3d %+f %+f %+f %+f %+f %+f\n",x,y,z,Gxyz[0],Gxyz[1],Gxyz[2],GOxyz[0],GOxyz[1],GOxyz[2]);
+    // Serial.printf("G:%3d %3d %3d %+f %+f %+f %+f %+f %+f\n",x,y,z,Gxyz[0],Gxyz[1],Gxyz[2],GOxyz[0],GOxyz[1],GOxyz[2]);
 
     #if !BMI160_VQF_REST_DETECTION_AVAILABLE
         restDetection.updateGyr(dtMicros, Gxyz);

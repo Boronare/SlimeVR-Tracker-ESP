@@ -48,9 +48,10 @@ struct QMI8658VQFParams: VQFParams {
     QMI8658VQFParams() : VQFParams() {
         magDistRejectionEnabled = true;
         tauAcc = 2.0f;
-        // restMinT = 2.0f;
-        // restThGyr = 0.6f; // 400 norm
-        // restThAcc = 0.06f; // 100 norm
+        restMinT = 2.0f;
+        restThGyr = 0.6f; // 400 norm
+        restThAcc = 0.06f; // 100 norm
+        tauMag = 2.0f;
     }
 };
 
