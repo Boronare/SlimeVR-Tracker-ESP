@@ -20,11 +20,15 @@
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
     THE SOFTWARE.
 */
+#ifndef SENSORS_QMI8658SENSOR_H
+#define SENSORS_QMI8658SENSOR_H
+
 #include "sensor.h"
-#include "logging/Logger.h"
+#include "sensors/axisremap.h"
+#include "magneto1.4.h"
 
 #include <QMI8658.h>
-#include<vqf.h>
+#include "SensorFusionRestDetect.h"
 #include "../motionprocessing/types.h"
 
 #include "../motionprocessing/GyroTemperatureCalibrator.h"
@@ -57,67 +61,49 @@ struct QMI8658VQFParams: VQFParams {
 
 class QMI8658Sensor : public Sensor
 {
-public:
-    QMI8658Sensor(uint8_t id, uint8_t address, float rotation) : 
-    Sensor("QMI8658Sensor", IMU_QMI8658, id, address, rotation)
-            , vqf(vqfParams, QMI8658_ODR_MICROS / 1e6f, QMI8658_ODR_MICROS / 1e6f, 20000 / 1e6f){};
-    ~QMI8658Sensor(){};
-    void motionSetup() override final;
-    void motionLoop() override final;
-    float getTemperature();
-    void getValueScaled();
-    void AutoCalibrateGyro(int16_t gx, int16_t gy, int16_t gz,int16_t ax, int16_t ay, int16_t az);
-    void CalibrateGyro(int16_t gx, int16_t gy, int16_t gz, int16_t acx, int16_t acy, int16_t acz, uint8_t save = 0);
-    void CalibrateMag(int16_t mx, int16_t my, int16_t mz);
-    void CalibrateAcc(int16_t ax, int16_t ay, int16_t az, int16_t gx, int16_t gy, int16_t gz);
-    void startCalibration(int calibrationType);
+    public:
+        QMI8658Sensor(uint8_t id, uint8_t address, float rotation, uint8_t sclPin, uint8_t sdaPin, int axisRemap=AXIS_REMAP_DEFAULT) :
+            Sensor("BMI160Sensor", IMU_BMI160, id, address, rotation, sclPin, sdaPin),
+            axisRemap(axisRemap),
+            sfusion(QMI8658_ODR_MICROS / 1e6f, QMI8658_ODR_MICROS / 1e6f, QMI8658_ODR_MICROS / 1e6f)
+        {
+        };
+        ~QMI8658Sensor(){};
+        void motionSetup() override final;
+        void motionLoop() override final;
+        float getTemperature();
+        void getValueScaled();
+        void AutoCalibrateGyro(int16_t gx, int16_t gy, int16_t gz,int16_t ax, int16_t ay, int16_t az);
+        void CalibrateGyro(int16_t gx, int16_t gy, int16_t gz, int16_t acx, int16_t acy, int16_t acz, uint8_t save = 0);
+        void CalibrateMag(int16_t mx, int16_t my, int16_t mz);
+        void CalibrateAcc(int16_t ax, int16_t ay, int16_t az, int16_t gx, int16_t gy, int16_t gz);
+        void startCalibration(int calibrationType);
 
-private:
-    QMI8658 imu{};
-    SlimeVR::Configuration::QMI8658CalibrationConfig m_Calibration;
-    float Axyz[3] = {0};
-    float Gxyz[3] = {0};
-    float Mxyz[3] = {0};
-    float lastAxyz[3] = {0};
-    bool fusionUpdated = false;
-    
-    // clock sync and sample timestamping
-    uint32_t sensorTime0 = 0;
-    uint32_t sensorTime1 = 0;
-    uint32_t localTime0 = 0;
-    uint32_t localTime1 = 0;
-    int32_t dtMicros;
-    double sensorTimeRatio = 1;
-    double sensorTimeRatioEma = 1;
-    double sampleDtMicros = 20000;
-    uint32_t syncLatencyMicros = 0;
-    uint32_t samplesSinceClockSync = 0;
-    uint32_t timestamp0 = 0;
-    uint32_t timestamp1 = 0;
-    
-    QMI8658VQFParams vqfParams {};
-    VQF vqf;
-    
-    // scheduling
-    uint32_t lastPollTime = micros();
-    uint32_t lastClockPollTime = micros();
-    uint32_t lastRotationPacketSent = 0;
-    uint32_t lastTemperaturePacketSent = 0;
+    private:
+        QMI8658 imu{};
+        int axisRemap;
 
-    GyroTemperatureCalibrator* gyroTempCalibrator = nullptr;
-    float temperature = 0;
-    int16_t prevM[3]{};
-    int16_t Cx[CaliSamples]{};
-    int16_t Cy[CaliSamples]{};
-    int16_t Cz[CaliSamples]{};
-    int8_t ignoreList[CaliSamples]{};
-    float q[4]{1.0f, 0.0f, 0.0f, 0.0f};
-    // EKF Kalman{q};
-    uint8_t Cr = CaliSamples, Cf = 0;
-    uint8_t accelDupCnt = 0;
-    float MagStr = 0;
-    // Loop timing globals
-    float GOxyzStaticTempCompensated[3];
-    SlimeVR::Configuration::QMI8658CalibrationConfig getMagAccCalibration();
-    bool verifyMagAccCali(SlimeVR::Configuration::QMI8658CalibrationConfig cali);
+        SlimeVR::Sensors::SensorFusionRestDetect sfusion;
+        float Axyz[3] = {0};
+        float Gxyz[3] = {0};
+        float Mxyz[3] = {0};
+        float lastAxyz[3] = {0};
+
+        int16_t prevM[3]{};
+        int16_t Cx[CaliSamples]{};
+        int16_t Cy[CaliSamples]{};
+        int16_t Cz[CaliSamples]{};
+        int8_t ignoreList[CaliSamples]{};
+        float q[4]{1.0f, 0.0f, 0.0f, 0.0f};
+        // EKF Kalman{q};
+        uint8_t Cr = CaliSamples, Cf = 0;
+        uint8_t accelDupCnt = 0;
+        float MagStr = 0;
+        // Loop timing globals
+        float GOxyzStaticTempCompensated[3];
+        SlimeVR::Configuration::QMI8658CalibrationConfig getMagAccCalibration();
+        bool verifyMagAccCali(SlimeVR::Configuration::QMI8658CalibrationConfig cali);
+
+        SlimeVR::Configuration::QMI8658CalibrationConfig m_Calibration;
 };
+#endif

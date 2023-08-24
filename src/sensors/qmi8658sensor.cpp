@@ -77,28 +77,25 @@ void QMI8658Sensor::motionSetup()
         Cf=0;
         Cr=CaliSamples-1;
     }
-    // allocate temperature memory after calibration because OOM
-    gyroTempCalibrator = new GyroTemperatureCalibrator(
-        SlimeVR::Configuration::CalibrationConfigType::QMI8658,
-        sensorId,
-        32678.0f/1024.0f,
-        (TEMP_CALIBRATION_SECONDS_PER_STEP / 20e-3)
-    );
-
-    #if QMI8658_USE_TEMPCAL
-        gyroTempCalibrator->loadConfig((TEMP_CALIBRATION_SECONDS_PER_STEP / 20e-3));
-        if (gyroTempCalibrator->config.hasCoeffs) {
-            float GOxyzAtTemp[3];
-            gyroTempCalibrator->approximateOffset(m_Calibration.temperature, GOxyzAtTemp);
-            for (uint32_t i = 0; i < 3; i++) {
-                GOxyzStaticTempCompensated[i] = m_Calibration.G_off[i] - GOxyzAtTemp[i];
-            }
-        }
-    #endif
         
     working = true;
 }
 void QMI8658Sensor::getValueScaled()
+{
+//     // Serial.printf("A : %+6d %+6d %+6d / G: %+6d %+6d %+6d / M:%+6d %+6d %+6d\n",ax,ay,az,gx,gy,gz,mx,my,mz);
+
+//     Gxyz[0] = (gx-m_Calibration.G_off[0]) * gscale;
+//     Gxyz[1] = (gy-m_Calibration.G_off[1]) * gscale;
+//     Gxyz[2] = (gz-m_Calibration.G_off[2]) * gscale;
+
+//     Mxyz[0] = (float)mx;
+//     Mxyz[1] = (float)my;
+//     Mxyz[2] = (float)mz;
+// // apply offsets and scale factors from Magneto
+
+//     // Serial.printf("Accel : %f\t%f\t%f, Raw : %d\t%d\t%d Bias : %f\t%f\t%f\n", Axyz[0], Axyz[1], Axyz[2], ax,ay,az, m_Calibration.A_B[0],m_Calibration.A_B[1],m_Calibration.A_B[2]);
+}
+void QMI8658Sensor::motionLoop()
 {
     uint8_t buffer[1536];
     int16_t fifoCnt;
@@ -121,7 +118,7 @@ void QMI8658Sensor::getValueScaled()
             // Serial.printf("i:%d G:%+6d %+6d %+6d A:%+6d %+6d %+6d\n",i,gx,gy,gz,ax,ay,az);
 
                 
-        AutoCalibrateGyro(gx,gy,gz,ax,ay,az);
+        // AutoCalibrateGyro(gx,gy,gz,ax,ay,az);
             Axyz[0] = (float)ax;
             Axyz[1] = (float)ay;
             Axyz[2] = (float)az;
@@ -139,52 +136,21 @@ void QMI8658Sensor::getValueScaled()
             lastAxyz[0] = Axyz[0];
             lastAxyz[1] = Axyz[1];
             lastAxyz[2] = Axyz[2];
-            #if BMI160_USE_VQF
-                vqf.updateAcc(Axyz);
-            #endif
+            sfusion.updateAcc(Axyz, QMI8658_ODR_MICROS*1e-6);
             optimistic_yield(100);
-            
-            constexpr float invPeriod = 1.0f / QMI8658_ODR_MICROS;
-            #if BMI160_USE_TEMPCAL
-                bool restDetected = false;
-                    restDetected = vqf.getRestDetected();
-                gyroTempCalibrator->updateGyroTemperatureCalibration(temperature, restDetected, gx, gy, gz);
-            #endif
 
             sensor_real_t gyroCalibratedStatic[3];
-            gyroCalibratedStatic[0] = (sensor_real_t)((((double)gx - m_Calibration.G_off[0]) * gscale));
-            gyroCalibratedStatic[1] = (sensor_real_t)((((double)gy - m_Calibration.G_off[1]) * gscale));
-            gyroCalibratedStatic[2] = (sensor_real_t)((((double)gz - m_Calibration.G_off[2]) * gscale));
+            Gxyz[0] = (sensor_real_t)((((double)gx - m_Calibration.G_off[0]) * gscale));
+            Gxyz[1] = (sensor_real_t)((((double)gy - m_Calibration.G_off[1]) * gscale));
+            Gxyz[2] = (sensor_real_t)((((double)gz - m_Calibration.G_off[2]) * gscale));
 
-            #if BMI160_USE_TEMPCAL
-            float GOxyz[3];
-            if (gyroTempCalibrator->approximateOffset(temperature, GOxyz)) {
-                Gxyz[0] = (sensor_real_t)((((double)gx - GOxyz[0] - GOxyzStaticTempCompensated[0]) * gscale));
-                Gxyz[1] = (sensor_real_t)((((double)gy - GOxyz[1] - GOxyzStaticTempCompensated[1]) * gscale));
-                Gxyz[2] = (sensor_real_t)((((double)gz - GOxyz[2] - GOxyzStaticTempCompensated[2]) * gscale));
-            }
-            else
-            #endif
-            {
-                Gxyz[0] = gyroCalibratedStatic[0];
-                Gxyz[1] = gyroCalibratedStatic[1];
-                Gxyz[2] = gyroCalibratedStatic[2];
-            }
             // Serial.printf("Gxyz : %f %f %f\n",Gxyz[0],Gxyz[1],Gxyz[2]);
-            #if BMI160_USE_VQF
-                vqf.updateGyr(Gxyz, (double)QMI8658_ODR_MICROS * 1.0e-6);
-                if(vqf.getRestDetected()){
-                    m_Calibration.G_off[0]=gx;
-                    m_Calibration.G_off[1]=gy;
-                    m_Calibration.G_off[2]=gz;
-                }
-            #endif
-            
-            // Axyz[0] = 0;
-            // Axyz[1] = 0;
-            // Axyz[2] = 0;
-
-            fusionUpdated = true;
+            sfusion.updateGyro(Gxyz, (double)QMI8658_ODR_MICROS * 1.0e-6);
+            if(sfusion.getRestDetected()){
+                m_Calibration.G_off[0]=gx;
+                m_Calibration.G_off[1]=gy;
+                m_Calibration.G_off[2]=gz;
+            }
         }
         #if !USE_6_AXIS
             imu.getMagneto(&mx,&my,&mz);
@@ -202,160 +168,23 @@ void QMI8658Sensor::getValueScaled()
                 for (i = 0; i < 3; i++)
                     Mxyz[i] = (Mxyz[i] - m_Calibration.M_B[i]);
             #endif
-                #if BMI160_USE_VQF
-                    vqf.updateMag(Mxyz);
-                #endif
+            sfusion.updateMag(Mxyz, QMI8658_ODR_MICROS * 1.0e-6);
         #endif
     }
-    dtMicros = (double)QMI8658_ODR_MICROS*((int)fifoCnt/12);
-//     // Serial.printf("A : %+6d %+6d %+6d / G: %+6d %+6d %+6d / M:%+6d %+6d %+6d\n",ax,ay,az,gx,gy,gz,mx,my,mz);
 
-//     Gxyz[0] = (gx-m_Calibration.G_off[0]) * gscale;
-//     Gxyz[1] = (gy-m_Calibration.G_off[1]) * gscale;
-//     Gxyz[2] = (gz-m_Calibration.G_off[2]) * gscale;
+    // float grav[3];
+    // grav[0] = (q[1] * q[3] - q[0] * q[2]) * 2;
+    // grav[1] = (q[0] * q[1] + q[2] * q[3]) * 2;
+    // grav[2] = (sq(q[0]) - sq(q[1]) - sq(q[2]) + sq(q[3]));
 
-//     Mxyz[0] = (float)mx;
-//     Mxyz[1] = (float)my;
-//     Mxyz[2] = (float)mz;
-// // apply offsets and scale factors from Magneto
-
-//     // Serial.printf("Accel : %f\t%f\t%f, Raw : %d\t%d\t%d Bias : %f\t%f\t%f\n", Axyz[0], Axyz[1], Axyz[2], ax,ay,az, m_Calibration.A_B[0],m_Calibration.A_B[1],m_Calibration.A_B[2]);
-}
-void QMI8658Sensor::motionLoop()
-{
-    uint32_t now = micros();
-    constexpr uint32_t TARGET_SYNC_INTERVAL_MICROS = 20000;
-    uint32_t elapsed = now - lastClockPollTime;
-    
-    if (elapsed >= TARGET_SYNC_INTERVAL_MICROS) {
-        lastClockPollTime = now - (elapsed - TARGET_SYNC_INTERVAL_MICROS);
-
-        const uint32_t nextLocalTime1 = micros();
-        uint32_t rawSensorTime;
-        if (imu.getSensorTime(&rawSensorTime)) {
-            localTime0 = localTime1;
-            localTime1 = nextLocalTime1;
-            syncLatencyMicros = (micros() - localTime1) * 0.3;
-            sensorTime0 = sensorTime1;
-            sensorTime1 = rawSensorTime;
-            if ((sensorTime0 > 0 || localTime0 > 0) && (sensorTime1 > 0 || sensorTime1 > 0)) {
-                // handle 24 bit overflow
-                double remoteDt = 
-                    sensorTime1 >= sensorTime0 ?
-                    sensorTime1 - sensorTime0 :
-                    (sensorTime1 + 0xFFFFFF) - sensorTime0;
-                double localDt = localTime1 - localTime0;
-                const double nextSensorTimeRatio = localDt / remoteDt;
-                
-                // handle sdk lags and time travel
-                if (round(nextSensorTimeRatio) == 1.0) {
-                    sensorTimeRatio = nextSensorTimeRatio;
-
-                    if (round(sensorTimeRatioEma) != 1.0) {
-                        sensorTimeRatioEma = sensorTimeRatio;
-                    }
-
-                    constexpr double EMA_APPROX_SECONDS = 1.0;
-                    constexpr uint32_t EMA_SAMPLES = (EMA_APPROX_SECONDS / 3 * 1e6) / TARGET_SYNC_INTERVAL_MICROS;
-                    sensorTimeRatioEma -= sensorTimeRatioEma / EMA_SAMPLES;
-                    sensorTimeRatioEma += sensorTimeRatio / EMA_SAMPLES;
-
-                    sampleDtMicros = QMI8658_ODR_MICROS * sensorTimeRatioEma;
-                    samplesSinceClockSync = 0;
-                }
-            }
-        }
-
-        temperature = getTemperature();
-        optimistic_yield(100);
+    fusedRotation = sfusion.getQuaternionQuat()*sensorOffset;
+    sfusion.getLinearAcc(acceleration);
+    newAcceleration = true;
+    if (!OPTIMIZE_UPDATES || !lastFusedRotationSent.equalsWithEpsilon(fusedRotation))
+    {
+        newFusedRotation = true;
+        lastFusedRotationSent = fusedRotation;
     }
-    now = micros();
-    constexpr uint32_t TARGET_POLL_INTERVAL_MICROS = 6000;
-    elapsed = now - lastPollTime;
-    if (elapsed >= TARGET_POLL_INTERVAL_MICROS) {
-        lastPollTime = now - (elapsed - TARGET_POLL_INTERVAL_MICROS);
-    
-        getValueScaled();
-        
-        optimistic_yield(100);
-        if (!fusionUpdated) return;
-        fusionUpdated = false;
-    }
-    now = micros();
-    constexpr float tMaxSendRateHz = 2.0f;
-    constexpr uint32_t tSendInterval = 1.0f/tMaxSendRateHz * 1e6;
-    elapsed = now - lastTemperaturePacketSent;
-    if (elapsed >= tSendInterval) {
-        lastTemperaturePacketSent = now - (elapsed - tSendInterval);
-        #if BMI160_TEMPCAL_DEBUG
-            uint32_t isCalibrating = gyroTempCalibrator->isCalibrating() ? 10000 : 0;
-            networkConnection.sendTemperature(isCalibrating + 10000 + (gyroTempCalibrator->config.samplesTotal * 100) + temperature, sensorId);
-        #else
-            networkConnection.sendTemperature(temperature, sensorId);
-        #endif
-        optimistic_yield(100);
-    }
-    now = micros();
-    constexpr float maxSendRateHz = 120.0f;
-    constexpr uint32_t sendInterval = 1.0f/maxSendRateHz * 1e6;
-    elapsed = now - lastRotationPacketSent;
-    if (elapsed >= sendInterval) {
-        lastRotationPacketSent = now - (elapsed - sendInterval);
-        // Serial.printf("Elapsed:%d-A:%f/%f/%f-G:%f/%f/%f-M:%f/%f/%f\n",dtMicros,Axyz[0],Axyz[1],Axyz[2],Gxyz[0],Gxyz[1],Gxyz[2],Mxyz[0],Mxyz[1],Mxyz[2]);
-        #if !BMI160_USE_VQF
-            #if !USE_6_AXIS
-                mahonyQuaternionUpdate(q, Axyz[0], Axyz[1], Axyz[2], Gxyz[0], Gxyz[1], Gxyz[2], Mxyz[0], Mxyz[1], Mxyz[2], dtMicros * 1.0e-6);
-            #else
-                mahonyQuaternionUpdate(q, Axyz[0], Axyz[1], Axyz[2], Gxyz[0], Gxyz[1], Gxyz[2], dtMicros * 1.0e-6);
-            #endif
-        #else
-            #if !USE_6_AXIS
-                vqf.getQuat9D(q);
-            #else
-                vqf.getQuat6D(q);
-            #endif
-        #endif
-            
-        if (isnan(q[0]) || isnan(q[1]) || isnan(q[2]) || isnan(q[3])) {
-            q[0] = 1;
-            q[1] = 0;
-            q[2] = 0;
-            q[3] = 0;
-            return;
-        }
-        // // m_Logger.debug("A : %+6.0f %+6.0f %+6.0f / G : %+f %+f %+f / M: %+6.0f %+6.0f %+6.0f / Q : %+f %+f %+f %+f", Axyz[0], Axyz[1], Axyz[2], Gxyz[0], Gxyz[1], Gxyz[2], Mxyz[0],Mxyz[1], Mxyz[2], q[0], q[1], q[2], q[3]);
-        
-        // // if(!Kalman.bUpdate(Gxyz,Axyz,Mxyz)){
-        // //     Serial.print("Vreset!");
-        // //     float qi[4] = {1,0,0,0};
-        // //     Kalman.vReset(qi);
-        // // }
-        // // float* qt = Kalman.GetX();
-        // // Serial.printf("Q:%f,%f,%f,%f\n",qt[0],qt[1],qt[2],qt[3]);
-        // // q[0] = qt[0]; q[1] = qt[1]; q[2] = qt[2]; q[3] = qt[3];
-
-        float grav[3];
-        grav[0] = (q[1] * q[3] - q[0] * q[2]) * 2;
-        grav[1] = (q[0] * q[1] + q[2] * q[3]) * 2;
-        grav[2] = (sq(q[0]) - sq(q[1]) - sq(q[2]) + sq(q[3]));
-
-        fusedRotation = Quat(q[1],q[2],q[3],q[0]);
-        fusedRotation *= sensorOffset;
-        // Serial.printf("Axyz:%+f %+f %+f, Grav:%+f %+f %+f\n",Axyz[0],Axyz[1],Axyz[2],grav.x,grav.y,grav.z);
-        #if SEND_ACCELERATION
-        {
-            // convert acceleration to m/s^2 (implicitly casts to float)
-            acceleration[0] = (Axyz[0] - grav[0])*CONST_EARTH_GRAVITY;
-            acceleration[1] = (Axyz[1] - grav[1])*CONST_EARTH_GRAVITY;
-            acceleration[2] = (Axyz[2] - grav[2])*CONST_EARTH_GRAVITY;
-        }
-        if (!lastFusedRotationSent.equalsWithEpsilon(fusedRotation))
-        {
-            newFusedRotation = true;
-            lastFusedRotationSent = fusedRotation;
-        }
-    }
-#endif
 }
 
 float QMI8658Sensor::getTemperature()
