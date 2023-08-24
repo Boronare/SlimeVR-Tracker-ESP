@@ -519,7 +519,7 @@ void Connection::updateSensorState(std::vector<Sensor *> & sensors) {
 	m_LastSensorInfoPacketTimestamp = millis();
 
 	for (int i = 0; i < (int)sensors.size(); i++) {
-		if (m_AckedSensorState[i] != sensors[i]->getSensorState()) {
+		if (sensors[i]->isWorking() && m_AckedSensorState[i] != sensors[i]->getSensorState()) {
 			sendSensorInfo(sensors[i]);
 		}
 	}

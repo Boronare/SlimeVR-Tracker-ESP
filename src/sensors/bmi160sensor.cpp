@@ -412,9 +412,12 @@ void BMI160Sensor::motionLoop() {
             lastRotationPacketSent = now - (elapsed - sendInterval);
 
             fusedRotation = sfusion.getQuaternionQuat();
-
+            float lastAcceleration[]{acceleration[0],acceleration[1],acceleration[2]};
             sfusion.getLinearAcc(this->acceleration);
-			this->newAcceleration = true;
+            if(!OPTIMIZE_UPDATES ||(abs(lastAcceleration[0]-acceleration[0])>0.1 &&
+                                    abs(lastAcceleration[1]-acceleration[1])>0.1 && 
+                                    abs(lastAcceleration[2]-acceleration[2])>0.1))
+			    this->newAcceleration = true;
 
             fusedRotation *= sensorOffset;
 
@@ -434,6 +437,11 @@ void BMI160Sensor::readFIFO() {
         #if BMI160_DEBUG
             numFIFOFailedReads++;
         #endif
+        return;
+    }
+
+    if (fifo.length <= 1){
+        
         if (!imu.getGyroFIFOEnabled()) {
             // initialize device
             imu.initialize(
@@ -456,11 +464,18 @@ void BMI160Sensor::readFIFO() {
                     static_assert(false, "Mag is enabled but BMI160_MAG_TYPE not set in defines");
                 #endif
             #endif
+            imu.setFIFOHeaderModeEnabled(true);
+            imu.setGyroFIFOEnabled(true);
+            imu.setAccelFIFOEnabled(true);
+            #if !USE_6_AXIS
+                imu.setMagFIFOEnabled(true);
+            #endif
+            delay(4);
+            imu.resetFIFO();
+            delay(2);
         }
         return;
     }
-
-    if (fifo.length <= 1) return;
     if (fifo.length > sizeof(fifo.data)) {
         #if BMI160_DEBUG
             numFIFODropped++;

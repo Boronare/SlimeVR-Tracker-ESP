@@ -13,19 +13,19 @@ void QMI8658::initialize(uint8_t addr, uint8_t maddr)
     magAddr = maddr;
     /* Issue a soft-reset to bring the device into a clean state */
     I2Cdev::writeByte(devAddr, QMI8658_RA_RESET, 0xB0);
-    delay(500);
+    delay(50);
     I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL1, 0b01100000);
-    delay(100);
+    delay(10);
 
     // mag -> setMode(0);
     I2Cdev::writeByte(magAddr, 0x0B, 0x01);
 
     /* config default accelerometer */
     I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL2, 0b00100111);
-    delay(100);
+    delay(10);
     /* config default gyroscope */
     I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL3, 0b01100111);
-    delay(100);
+    delay(10);
     // mag -> setMode(0x0F);
     I2Cdev::writeByte(magAddr, 0x09, 0x01 | 0x00 | 0x00 | 0x00);
     // /* config default magnetometer */
@@ -33,16 +33,13 @@ void QMI8658::initialize(uint8_t addr, uint8_t maddr)
     /* config default filter setting */
     // I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL5, 0b01110111);
     I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL5, 0b00000000);
-    delay(100);
     /* config default AttitudeEngine Settings */
     I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL6, 0b00000111);
-    // I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL6, 0b00100110);
-    delay(100);
+    // I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL6, 0b00100110);0);
     /* config Mag/Gyr/Acc Enabled/Disabled */
     I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL7, 0b10100011);
     // I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL7, 0b00001011);
     I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL8, 0b00000000);
-    delay(500);
 
 }
 

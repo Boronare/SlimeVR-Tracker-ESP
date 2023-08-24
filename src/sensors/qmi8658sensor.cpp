@@ -80,27 +80,14 @@ void QMI8658Sensor::motionSetup()
         
     working = true;
 }
-void QMI8658Sensor::getValueScaled()
-{
-//     // Serial.printf("A : %+6d %+6d %+6d / G: %+6d %+6d %+6d / M:%+6d %+6d %+6d\n",ax,ay,az,gx,gy,gz,mx,my,mz);
-
-//     Gxyz[0] = (gx-m_Calibration.G_off[0]) * gscale;
-//     Gxyz[1] = (gy-m_Calibration.G_off[1]) * gscale;
-//     Gxyz[2] = (gz-m_Calibration.G_off[2]) * gscale;
-
-//     Mxyz[0] = (float)mx;
-//     Mxyz[1] = (float)my;
-//     Mxyz[2] = (float)mz;
-// // apply offsets and scale factors from Magneto
-
-//     // Serial.printf("Accel : %f\t%f\t%f, Raw : %d\t%d\t%d Bias : %f\t%f\t%f\n", Axyz[0], Axyz[1], Axyz[2], ax,ay,az, m_Calibration.A_B[0],m_Calibration.A_B[1],m_Calibration.A_B[2]);
-}
 void QMI8658Sensor::motionLoop()
 {
     uint8_t buffer[1536];
     int16_t fifoCnt;
     
-    if(!imu.isAlive()) imu.initialize(addr, 0x2C+sensorId);
+    if(!imu.isAlive()){
+        if(imu.testConnection()) imu.initialize(addr, 0x2C+sensorId);
+    }
     else{
         // uint8_t status = imu.getStatus0();
         uint8_t i;
@@ -125,7 +112,7 @@ void QMI8658Sensor::motionLoop()
             #if useFullCalibrationMatrix == true
                 float tmp[3];
                 for (uint8_t i = 0; i < 3; i++)
-                    tmp[i] = (Axyz[i] - m_Calibration.A_B[i])/ACCEL_SENSITIVITY_8G;
+                    tmp[i] = (Axyz[i] - m_Calibration.A_B[i])*CONST_EARTH_GRAVITY/ACCEL_SENSITIVITY_8G;
                 Axyz[0] = m_Calibration.A_Ainv[0][0] * tmp[0] + m_Calibration.A_Ainv[0][1] * tmp[1] + m_Calibration.A_Ainv[0][2] * tmp[2];
                 Axyz[1] = m_Calibration.A_Ainv[1][0] * tmp[0] + m_Calibration.A_Ainv[1][1] * tmp[1] + m_Calibration.A_Ainv[1][2] * tmp[2];
                 Axyz[2] = m_Calibration.A_Ainv[2][0] * tmp[0] + m_Calibration.A_Ainv[2][1] * tmp[1] + m_Calibration.A_Ainv[2][2] * tmp[2];
@@ -133,13 +120,9 @@ void QMI8658Sensor::motionLoop()
                 for (uint8_t i = 0; i < 3; i++)
                     Axyz[i] = (Axyz[i] - m_Calibration.A_B[i])/ACCEL_SENSITIVITY_8G;
             #endif
-            lastAxyz[0] = Axyz[0];
-            lastAxyz[1] = Axyz[1];
-            lastAxyz[2] = Axyz[2];
             sfusion.updateAcc(Axyz, QMI8658_ODR_MICROS*1e-6);
             optimistic_yield(100);
 
-            sensor_real_t gyroCalibratedStatic[3];
             Gxyz[0] = (sensor_real_t)((((double)gx - m_Calibration.G_off[0]) * gscale));
             Gxyz[1] = (sensor_real_t)((((double)gy - m_Calibration.G_off[1]) * gscale));
             Gxyz[2] = (sensor_real_t)((((double)gz - m_Calibration.G_off[2]) * gscale));
@@ -178,8 +161,12 @@ void QMI8658Sensor::motionLoop()
     // grav[2] = (sq(q[0]) - sq(q[1]) - sq(q[2]) + sq(q[3]));
 
     fusedRotation = sfusion.getQuaternionQuat()*sensorOffset;
+    float lastAcceleration[]{acceleration[0],acceleration[1],acceleration[2]};
     sfusion.getLinearAcc(acceleration);
-    newAcceleration = true;
+    if(!OPTIMIZE_UPDATES ||(abs(lastAcceleration[0]-acceleration[0])>0.1 &&
+                            abs(lastAcceleration[1]-acceleration[1])>0.1 && 
+                            abs(lastAcceleration[2]-acceleration[2])>0.1))
+        this->newAcceleration = true;
     if (!OPTIMIZE_UPDATES || !lastFusedRotationSent.equalsWithEpsilon(fusedRotation))
     {
         newFusedRotation = true;

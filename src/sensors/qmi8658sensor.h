@@ -72,7 +72,6 @@ class QMI8658Sensor : public Sensor
         void motionSetup() override final;
         void motionLoop() override final;
         float getTemperature();
-        void getValueScaled();
         void AutoCalibrateGyro(int16_t gx, int16_t gy, int16_t gz,int16_t ax, int16_t ay, int16_t az);
         void CalibrateGyro(int16_t gx, int16_t gy, int16_t gz, int16_t acx, int16_t acy, int16_t acz, uint8_t save = 0);
         void CalibrateMag(int16_t mx, int16_t my, int16_t mz);
