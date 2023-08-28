@@ -63,7 +63,7 @@ class QMI8658Sensor : public Sensor
 {
     public:
         QMI8658Sensor(uint8_t id, uint8_t address, float rotation, uint8_t sclPin, uint8_t sdaPin, int axisRemap=AXIS_REMAP_DEFAULT) :
-            Sensor("BMI160Sensor", IMU_BMI160, id, address, rotation, sclPin, sdaPin),
+            Sensor("QMI8658Sensor", IMU_QMI8658, id, address, rotation, sclPin, sdaPin),
             axisRemap(axisRemap),
             sfusion(QMI8658_ODR_MICROS / 1e6f, QMI8658_ODR_MICROS / 1e6f, QMI8658_ODR_MICROS / 1e6f)
         {

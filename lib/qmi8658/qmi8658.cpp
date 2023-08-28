@@ -40,6 +40,7 @@ void QMI8658::initialize(uint8_t addr, uint8_t maddr)
     I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL7, 0b10100011);
     // I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL7, 0b00001011);
     I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL8, 0b00000000);
+    delay(200);
 
 }
 

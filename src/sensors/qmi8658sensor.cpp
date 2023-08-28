@@ -45,6 +45,10 @@ void QMI8658Sensor::motionSetup()
                 m_Calibration.A_Ainv[2][0],m_Calibration.A_Ainv[2][1],m_Calibration.A_Ainv[2][2]
         );
         break;
+    case SlimeVR::Configuration::CalibrationConfigType::NONE:
+        m_Logger.warn("No calibration data found for sensor %d, ignoring...", sensorId);
+        m_Logger.info("Calibration is advised");
+        break;
     default:
         m_Logger.warn("Incompatible calibration data found for sensor %d, ignoring...", sensorId);
         m_Logger.info("Calibration is advised");
@@ -316,7 +320,7 @@ void QMI8658Sensor::CalibrateAcc(int16_t ax, int16_t ay, int16_t az, int16_t gx,
     abs(gx-m_Calibration.G_off[0]) < 200 && abs(gy-m_Calibration.G_off[1]) < 200 && abs(gz-m_Calibration.G_off[2]) < 200)
     {
         ledManager.off();
-        if(accelDupCnt<=CaliSamples/12){
+        if(accelDupCnt<=CaliSamples/6){
             accelDupCnt++;
             if(Cf==0 && Cr == CaliSamples-1) Serial.print("Starting Accelero Calibration");
             Cf++;
