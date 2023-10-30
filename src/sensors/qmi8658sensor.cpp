@@ -164,7 +164,7 @@ void QMI8658Sensor::motionLoop()
 
     fusedRotation = sfusion.getQuaternionQuat()*sensorOffset;
     float lastAcceleration[]{acceleration[0],acceleration[1],acceleration[2]};
-    sfusion.getLinearAcc(acceleration);
+    acceleration=sfusion.getLinearAccVec();
     if(!OPTIMIZE_UPDATES ||(abs(lastAcceleration[0]-acceleration[0])>0.1 &&
                             abs(lastAcceleration[1]-acceleration[1])>0.1 && 
                             abs(lastAcceleration[2]-acceleration[2])>0.1))
