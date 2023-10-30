@@ -39,7 +39,7 @@
 #define BMI160_USE_BASIC_VQF false
 
 // Use temperature calibration.
-#define BMI160_USE_TEMPCAL true
+#define BMI160_USE_TEMPCAL false
 
 // How long to run gyro calibration for.
 // Disables this calibration step if value is 0.

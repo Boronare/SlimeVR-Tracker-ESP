@@ -36,8 +36,8 @@ namespace SlimeVR
                 #ifndef VQF_NO_MOTION_BIAS_ESTIMATION
                 motionBiasEstEnabled = false;
                 #endif
-                tauAcc = 1.0f;
-                tauMag = 1.0f;
+                tauAcc = 2.0f;
+                tauMag = 2.0f;
                 restMinT = 2.0f;
                 restThGyr = 0.6f; // 400 norm
                 restThAcc = 0.06f; // 100 norm

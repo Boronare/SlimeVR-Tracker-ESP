@@ -139,7 +139,6 @@ void QMI8658Sensor::motionLoop()
                 m_Calibration.G_off[2]=gz;
             }
         }
-        #if !USE_6_AXIS
             imu.getMagneto(&mx,&my,&mz);
             Mxyz[0] = (float)mx;
             Mxyz[1] = (float)my;
@@ -156,7 +155,6 @@ void QMI8658Sensor::motionLoop()
                     Mxyz[i] = (Mxyz[i] - m_Calibration.M_B[i]);
             #endif
             sfusion.updateMag(Mxyz, QMI8658_ODR_MICROS * 1.0e-6);
-        #endif
     }
 
     // float grav[3];
@@ -504,6 +502,7 @@ void QMI8658Sensor::startCalibration(int calibrationType) {
         CalibrateMag(mx,my,mz);
         delay(20);
     }
+    imu.resetFIFO();
 
     m_Logger.debug("Saved the calibration data");
 

@@ -41,12 +41,18 @@ void QMI8658::initialize(uint8_t addr, uint8_t maddr)
     // I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL7, 0b00001011);
     I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL8, 0b00000000);
     delay(200);
+    // Issue a FIFO Reset
+    I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL9, 0x04);
 
 }
 
 bool QMI8658::isAlive(){
     I2Cdev::readByte(devAddr, QMI8658_RA_CTRL7, buffer);
     return buffer[0]&3 > 0;
+}
+
+void QMI8658::resetFIFO(){
+    I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL9, 0x04);
 }
 
 void QMI8658::getMotion6(int16_t *ax, int16_t *ay, int16_t *az, int16_t *gx, int16_t *gy, int16_t *gz)
