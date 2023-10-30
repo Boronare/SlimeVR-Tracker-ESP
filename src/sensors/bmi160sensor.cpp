@@ -33,12 +33,6 @@ void BMI160Sensor::initHMC(BMI160MagRate magRate) {
     imu.setRegister(BMI160_RA_CMD, BMI160_CMD_MAG_MODE_NORMAL);
     delay(60);
 
-    imu.setRegister(BMI160_RA_CMD, BMI160_EN_PULL_UP_REG_1);
-    imu.setRegister(BMI160_RA_CMD, BMI160_EN_PULL_UP_REG_2);
-    imu.setRegister(BMI160_RA_CMD, BMI160_EN_PULL_UP_REG_3);
-    imu.setRegister(BMI160_7F, BMI160_EN_PULL_UP_REG_4);
-    imu.setRegister(BMI160_7F, BMI160_EN_PULL_UP_REG_5);
-
     /* Enable MAG interface */
     imu.setRegister(BMI160_RA_IF_CONF, BMI160_IF_CONF_MODE_PRI_AUTO_SEC_MAG);
     delay(1);
@@ -64,12 +58,6 @@ void BMI160Sensor::initQMC(BMI160MagRate magRate) {
     /* Set MAG interface normal power mode */
     imu.setRegister(BMI160_RA_CMD, BMI160_CMD_MAG_MODE_NORMAL);
     delay(60);
-
-    imu.setRegister(BMI160_RA_CMD, BMI160_EN_PULL_UP_REG_1);
-    imu.setRegister(BMI160_RA_CMD, BMI160_EN_PULL_UP_REG_2);
-    imu.setRegister(BMI160_RA_CMD, BMI160_EN_PULL_UP_REG_3);
-    imu.setRegister(BMI160_7F, BMI160_EN_PULL_UP_REG_4);
-    imu.setRegister(BMI160_7F, BMI160_EN_PULL_UP_REG_5);
 
     /* Enable MAG interface */
     imu.setRegister(BMI160_RA_IF_CONF, BMI160_IF_CONF_MODE_PRI_AUTO_SEC_MAG);
@@ -359,9 +347,7 @@ void BMI160Sensor::motionLoop() {
                 if (end - lastCpuUsagePrinted > 1e6) {
                     bool restDetected = sfusion.getRestDetected();
 
-                    #define BMI160_FUSION_TYPE "sfusion"
-
-                    m_Logger.debug("readFIFO took %0.4f ms, read gyr %i acc %i mag %i rest %i resets %i readerrs %i type " BMI160_FUSION_TYPE,
+                    m_Logger.debug("readFIFO took %0.4f ms, read gyr %i acc %i mag %i rest %i resets %i readerrs %i type " SENSOR_FUSION_TYPE_STRING,
                         ((float)cpuUsageMicros / 1e3f),
                         gyrReads,
                         accReads,
@@ -413,19 +399,13 @@ void BMI160Sensor::motionLoop() {
 
             fusedRotation = sfusion.getQuaternionQuat();
             float lastAcceleration[]{acceleration[0],acceleration[1],acceleration[2]};
-            sfusion.getLinearAcc(this->acceleration);
+            acceleration=sfusion.getLinearAccVec();
             if(!OPTIMIZE_UPDATES ||(abs(lastAcceleration[0]-acceleration[0])>0.1 &&
                                     abs(lastAcceleration[1]-acceleration[1])>0.1 && 
                                     abs(lastAcceleration[2]-acceleration[2])>0.1))
-			    this->newAcceleration = true;
+                setAccelerationReady();
 
             fusedRotation *= sensorOffset;
-
-            if (!OPTIMIZE_UPDATES || !lastFusedRotationSent.equalsWithEpsilon(fusedRotation))
-            {
-                newFusedRotation = true;
-                lastFusedRotationSent = fusedRotation;
-            }
 
             optimistic_yield(100);
         }

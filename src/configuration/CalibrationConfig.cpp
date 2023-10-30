@@ -39,6 +39,8 @@ namespace SlimeVR {
                 return "ICM20948";
             case QMI8658:
                 return "QMI8658";
+            case ICM42688:
+                return "ICM42688";
             default:
                 return "UNKNOWN";
             }
