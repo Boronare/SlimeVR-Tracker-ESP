@@ -13,7 +13,7 @@ void QMI8658::initialize(uint8_t addr, uint8_t maddr)
     magAddr = maddr;
     /* Issue a soft-reset to bring the device into a clean state */
     I2Cdev::writeByte(devAddr, QMI8658_RA_RESET, 0xB0);
-    delay(50);
+    delay(200);
     I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL1, 0b01100000);
     delay(10);
 
@@ -41,8 +41,6 @@ void QMI8658::initialize(uint8_t addr, uint8_t maddr)
     // I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL7, 0b00001011);
     I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL8, 0b00000000);
     delay(200);
-    // Issue a FIFO Reset
-    I2Cdev::writeByte(devAddr, QMI8658_RA_CTRL9, 0x04);
 
 }
 

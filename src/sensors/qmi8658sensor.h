@@ -48,17 +48,6 @@ constexpr float QMI8658_ODR_HZ = 56.05f;//QMI8658A
 
 constexpr float QMI8658_ODR_MICROS = 1.0f / QMI8658_ODR_HZ * 1e6f;
 
-struct QMI8658VQFParams: VQFParams {
-    QMI8658VQFParams() : VQFParams() {
-        magDistRejectionEnabled = true;
-        tauAcc = 2.0f;
-        restMinT = 2.0f;
-        restThGyr = 0.6f; // 400 norm
-        restThAcc = 0.06f; // 100 norm
-        tauMag = 2.0f;
-    }
-};
-
 class QMI8658Sensor : public Sensor
 {
     public:
