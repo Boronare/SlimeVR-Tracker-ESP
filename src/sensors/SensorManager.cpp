@@ -108,6 +108,7 @@ namespace SlimeVR
                 break;
             case IMU_QMI8658:
                 sensor = new QMI8658Sensor(sensorID, address, rotation, sclPin, sdaPin);
+                break;
             case IMU_ICM42688:
                 sensor = new ICM42688Sensor(sensorID, address, rotation, sclPin, sdaPin);
                 break;

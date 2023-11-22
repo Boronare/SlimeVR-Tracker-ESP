@@ -83,7 +83,7 @@ constexpr float BMI160_FIFO_AVG_DATA_FRAME_LENGTH = (
     BMI160_ODR_ACC_HZ * BMI160_FIFO_A_LEN +
     BMI160_ODR_MAG_HZ * BMI160_FIFO_M_LEN
 ) / BMI160_SETTINGS_MAX_ODR_HZ;
-constexpr float BMI160_FIFO_READ_BUFFER_SIZE_MICROS = 30000;
+constexpr float BMI160_FIFO_READ_BUFFER_SIZE_MICROS = 300000;
 constexpr float BMI160_FIFO_READ_BUFFER_SIZE_SAMPLES =
     BMI160_SETTINGS_MAX_ODR_HZ * BMI160_FIFO_READ_BUFFER_SIZE_MICROS / 1e6f;
 constexpr uint16_t BMI160_FIFO_MAX_LENGTH = 1024;
@@ -132,6 +132,7 @@ class BMI160Sensor : public Sensor {
         void initHMC(BMI160MagRate magRate);
         void initQMC(BMI160MagRate magRate);
         void initMMC();
+        void calcMMCOffset();
 
         void motionSetup() override final;
         void motionLoop() override final;
@@ -215,6 +216,8 @@ class BMI160Sensor : public Sensor {
         sensor_real_t Axyz[3] = {0};
         sensor_real_t Mxyz[3] = {0};
         sensor_real_t lastAxyz[3] = {0};
+        int16_t mmcOffset[3] = {0};
+        uint32_t lastMagOffCalc = 0;
 
         double gscaleX = BMI160_GSCALE;
         double gscaleY = BMI160_GSCALE;

@@ -47,7 +47,7 @@ namespace SlimeVR
                 motionBiasEstEnabled = false;
                 #endif
                 tauAcc = 2.0f;
-                tauMag = 2.0f;
+                tauMag = 6.0f;
                 restMinT = 2.0f;
                 restThGyr = 0.6f; // 400 norm
                 restThAcc = 0.06f; // 100 norm

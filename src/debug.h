@@ -28,7 +28,7 @@
 #define IMU_MPU6050_RUNTIME_CALIBRATION // Comment to revert to startup/traditional-calibration
 #define BNO_USE_ARVR_STABILIZATION true // Set to false to disable stabilization for BNO085+ IMUs
 #define BNO_USE_MAGNETOMETER_CORRECTION false // Set to true to enable magnetometer correction for BNO08x IMUs. Only works with USE_6_AXIS set to true.
-#define USE_6_AXIS true // uses 9 DoF (with mag) if false (only for ICM-20948 and BNO0xx currently)
+#define USE_6_AXIS false // uses 9 DoF (with mag) if false (only for ICM-20948 and BNO0xx currently)
 #define LOAD_BIAS true // Loads the bias values from NVS on start
 #define SAVE_BIAS true // Periodically saves bias calibration data to NVS
 #define BIAS_DEBUG false // Printing BIAS Variables to serial (ICM20948 only)
@@ -54,7 +54,7 @@
 #define samplingRateInMillis 20
 
 // Sleeping options
-#define POWERSAVING_MODE POWER_SAVING_LEGACY  // Minimum causes sporadic data pauses
+#define POWERSAVING_MODE POWER_SAVING_MODERATE  // Minimum causes sporadic data pauses
 #if POWERSAVING_MODE >= POWER_SAVING_MINIMUM
     #define TARGET_LOOPTIME_MICROS (samplingRateInMillis * 1000)
 #endif
@@ -65,7 +65,7 @@
 #define PACKET_BUNDLING_BUFFER_SIZE_MICROS 10000
 
 // Setup for the Magnetometer
-#define useFullCalibrationMatrix true
+#define useFullCalibrationMatrix false
 
 // Battery configuration
 #define batterySampleRate 10000

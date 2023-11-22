@@ -84,12 +84,6 @@ void BMI160Sensor::initMMC(){    /* Configure MAG interface and setup mode */
     imu.setRegister(BMI160_RA_CMD, BMI160_CMD_MAG_MODE_NORMAL);
     delay(60);
 
-    imu.setRegister(BMI160_RA_CMD, BMI160_EN_PULL_UP_REG_1);
-    imu.setRegister(BMI160_RA_CMD, BMI160_EN_PULL_UP_REG_2);
-    imu.setRegister(BMI160_RA_CMD, BMI160_EN_PULL_UP_REG_3);
-    imu.setRegister(BMI160_7F, BMI160_EN_PULL_UP_REG_4);
-    imu.setRegister(BMI160_7F, BMI160_EN_PULL_UP_REG_5);
-
     /* Enable MAG interface */
     imu.setRegister(BMI160_RA_IF_CONF, BMI160_IF_CONF_MODE_PRI_AUTO_SEC_MAG);
     delay(1);
@@ -100,18 +94,53 @@ void BMI160Sensor::initMMC(){    /* Configure MAG interface and setup mode */
     delay(3);
 
     /* Configure MMC5603NJ Sensor */
+
+    //Set-Reset to clear offset of sensor
+
     imu.setMagRegister(0x1C, 0x02);
     delay(3);
     imu.setMagRegister(0x1A, 50);
     delay(3);
-    imu.setMagRegister(0x1B, 0xA0);
+    imu.setMagRegister(0x1B, 0x90);
     delay(3);
-    imu.setMagRegister(0x1D, 0x1B);
+    imu.setMagRegister(0x1D, 0x10);
 
     imu.setRegister(BMI160_RA_MAG_IF_2_READ_RA, 0x00);
     imu.setRegister(BMI160_RA_MAG_CONF, 7);
     delay(3);
     imu.setRegister(BMI160_RA_MAG_IF_1_MODE, BMI160_MAG_DATA_MODE_6);
+    while(mmcOffset[0]==0 && mmcOffset[1]==0 && mmcOffset[2]==0){
+        delay(50);
+        calcMMCOffset();
+    }
+}
+
+void BMI160Sensor::calcMMCOffset(){
+    int16_t mx,my,mz,ox,oy,oz;
+    imu.getMagnetometer(&mx,&my,&mz);
+    ox=mx; oy=my; oz=mz;
+    //trigger inverted measurement
+    imu.setMagRegister(0x1B, 0x08);
+    delay(15);
+    //get measurement when not yet inverted one measured.
+    imu.getMagnetometer(&mx,&my,&mz);
+    //if magneto moved but not moved lot, regard as stable position.
+    if(abs(ox-mx)<20&&abs(oy-my)<20&&abs(oz-mz)<20&&(ox!=mx||oy!=my||oz!=mz)){
+        ox=mx; oy=my; oz=mz;
+        delay(30);
+        //return to common measurement.
+        imu.setMagRegister(0x1B, 0x90);
+        delay(15);
+        //get inverted measurement
+        imu.getMagnetometer(&mx,&my,&mz);
+        if(abs(mx-ox)<60&&abs(my-oy)<60&&abs(mz-oz)<60) return;
+        //Offset = measurement + inverted measurement (o+m) + (-o+m)
+        ox=(mx+ox)/2; oy=(my+oy)/2; oz=(mz+oz)/2;
+        mmcOffset[0]=ox;
+        mmcOffset[1]=oy;
+        mmcOffset[2]=oz;
+    }
+    else imu.setMagRegister(0x1B, 0x90);
 }
 
 void BMI160Sensor::motionSetup() {
@@ -285,7 +314,7 @@ void BMI160Sensor::motionLoop() {
     #endif
     {
         uint32_t now = micros();
-        constexpr uint32_t BMI160_TARGET_SYNC_INTERVAL_MICROS = 25000;
+        constexpr uint32_t BMI160_TARGET_SYNC_INTERVAL_MICROS = 10000;
         uint32_t elapsed = now - lastClockPollTime;
         if (elapsed >= BMI160_TARGET_SYNC_INTERVAL_MICROS) {
             lastClockPollTime = now - (elapsed - BMI160_TARGET_SYNC_INTERVAL_MICROS);
@@ -388,10 +417,19 @@ void BMI160Sensor::motionLoop() {
             optimistic_yield(100);
         }
     }
+    // if(sfusion.getRestDetected()){
+        uint32_t now = micros();
+        constexpr uint32_t magOffCalcInterval = 3 * 1e6;
+        uint32_t elapsed = now - lastMagOffCalc;
+        if(elapsed>=magOffCalcInterval){
+            lastMagOffCalc = now;
+            calcMMCOffset();
+        }
+    // }
 
     {
         uint32_t now = micros();
-        constexpr float maxSendRateHz = 120.0f;
+        constexpr float maxSendRateHz = 60.0f;
         constexpr uint32_t sendInterval = 1.0f/maxSendRateHz * 1e6;
         uint32_t elapsed = now - lastRotationPacketSent;
         if (elapsed >= sendInterval) {
@@ -400,12 +438,20 @@ void BMI160Sensor::motionLoop() {
             fusedRotation = sfusion.getQuaternionQuat();
             float lastAcceleration[]{acceleration[0],acceleration[1],acceleration[2]};
             acceleration=sfusion.getLinearAccVec();
-            if(!OPTIMIZE_UPDATES ||(abs(lastAcceleration[0]-acceleration[0])>0.1 &&
-                                    abs(lastAcceleration[1]-acceleration[1])>0.1 && 
-                                    abs(lastAcceleration[2]-acceleration[2])>0.1))
+            if(!OPTIMIZE_UPDATES ||!(abs(lastAcceleration[0])<0.15 &&
+                                    abs(lastAcceleration[1])<0.15 && 
+                                    abs(lastAcceleration[2])<0.15 &&
+                                    abs(acceleration[0])<0.15 &&
+                                    abs(acceleration[1])<0.15 && 
+                                    abs(acceleration[2])<0.15))
                 setAccelerationReady();
 
             fusedRotation *= sensorOffset;
+            if (!OPTIMIZE_UPDATES || !lastFusedRotationSent.equalsWithEpsilon(fusedRotation))
+            {
+                newFusedRotation = true;
+                lastFusedRotationSent = fusedRotation;
+            }
 
             optimistic_yield(100);
         }
@@ -514,7 +560,9 @@ void BMI160Sensor::readFIFO() {
                 BMI160_FIFO_FRAME_ENSURE_BYTES_AVAILABLE(BMI160_FIFO_M_LEN);
                 #if !USE_6_AXIS
                     getMagnetometerXYZFromBuffer(&fifo.data[i], &mx, &my, &mz);
+                    mx-=mmcOffset[0]; my-=mmcOffset[1]; mz-=mmcOffset[2];
                     mnew = true;
+                    // Serial.printf("M:%+5d/%+5d/%+5d\n",mx,my,mz);
                 #endif
                 i += BMI160_FIFO_M_LEN;
             }
@@ -713,7 +761,7 @@ void BMI160Sensor::applyAccelCalibrationAndScale(sensor_real_t Axyz[3]) {
             Axyz[2] = m_Calibration.A_Ainv[2][0] * tmp[0] + m_Calibration.A_Ainv[2][1] * tmp[1] + m_Calibration.A_Ainv[2][2] * tmp[2];
         #else
             for (uint8_t i = 0; i < 3; i++)
-                Axyz[i] = (Axyz[i] - calibration->A_B[i]);
+                Axyz[i] = (Axyz[i] - m_Calibration.A_B[i]);
         #endif
     }
     Axyz[0] *= BMI160_ASCALE;
@@ -732,7 +780,7 @@ void BMI160Sensor::applyMagCalibrationAndScale(sensor_real_t Mxyz[3]) {
             Mxyz[1] = m_Calibration.M_Ainv[1][0] * temp[0] + m_Calibration.M_Ainv[1][1] * temp[1] + m_Calibration.M_Ainv[1][2] * temp[2];
             Mxyz[2] = m_Calibration.M_Ainv[2][0] * temp[0] + m_Calibration.M_Ainv[2][1] * temp[1] + m_Calibration.M_Ainv[2][2] * temp[2];
         #else
-            for (i = 0; i < 3; i++)
+            for (uint8_t i = 0; i < 3; i++)
                 Mxyz[i] = (Mxyz[i] - m_Calibration.M_B[i]);
         #endif
     #endif
@@ -770,11 +818,12 @@ bool BMI160Sensor::hasMagCalibration() {
 
 void BMI160Sensor::startCalibration(int calibrationType) {
     ledManager.on();
-
     maybeCalibrateGyro();
     maybeCalibrateAccel();
+    #if(USE_6_AXIS)
+    #else
     maybeCalibrateMag();
-
+    #endif
     m_Logger.debug("Saving the calibration data");
 
     SlimeVR::Configuration::CalibrationConfig calibration;
@@ -899,7 +948,7 @@ void BMI160Sensor::maybeCalibrateAccel() {
         m_Logger.debug("Calculating accelerometer calibration data...");
     #elif BMI160_ACCEL_CALIBRATION_METHOD == ACCEL_CALIBRATION_METHOD_6POINT
         RestDetectionParams calibrationRestDetectionParams;
-        calibrationRestDetectionParams.restMinTimeMicros = 1 * 1e6;
+        calibrationRestDetectionParams.restMinTimeMicros = 0.5 * 1e6;
         calibrationRestDetectionParams.restThAcc = 0.25f;
         RestDetection calibrationRestDetection(
             calibrationRestDetectionParams,
@@ -908,7 +957,7 @@ void BMI160Sensor::maybeCalibrateAccel() {
         );
 
         constexpr uint16_t expectedPositions = 6;
-        constexpr uint16_t numSamplesPerPosition = 96;
+        constexpr uint16_t numSamplesPerPosition = 32;
 
         uint16_t numPositionsRecorded = 0;
         uint16_t numCurrentPositionSamples = 0;
@@ -938,6 +987,7 @@ void BMI160Sensor::maybeCalibrateAccel() {
             }
 
             if (calibrationRestDetection.getRestDetected()) {
+                ledManager.on();
                 const uint16_t i = numCurrentPositionSamples * 3;
                 accelCalibrationChunk[i + 0] = ax;
                 accelCalibrationChunk[i + 1] = ay;
@@ -956,7 +1006,6 @@ void BMI160Sensor::maybeCalibrateAccel() {
                     numCurrentPositionSamples = 0;
                     if (numPositionsRecorded < expectedPositions) {
                         ledManager.pattern(50, 50, 2);
-                        ledManager.on();
                         m_Logger.info("Recorded, waiting for position %i...", numPositionsRecorded + 1);
                         waitForMotion = true;
                     }
@@ -1001,6 +1050,13 @@ void BMI160Sensor::maybeCalibrateMag() {
         m_Logger.debug("Skipping magnetometer calibration");
         return;
     #endif
+    
+    #if BMI160_MAG_TYPE == BMI160_MAG_TYPE_MMC
+        while(mmcOffset[0]==0 && mmcOffset[1]==0 && mmcOffset[2]==0){
+            delay(50);
+            calcMMCOffset();
+        }
+    #endif
 
     MagnetoCalibration* magneto = new MagnetoCalibration();
 
@@ -1027,6 +1083,7 @@ void BMI160Sensor::maybeCalibrateMag() {
         int16_t mx, my, mz;
         imu.getMagnetometerXYZBuffer(magdata);
         getMagnetometerXYZFromBuffer(magdata, &mx, &my, &mz);
+        mx-=mmcOffset[0]; my-=mmcOffset[1]; mz-=mmcOffset[2];
         magneto->sample(mx, my, mz);
 
         ledManager.off();
@@ -1083,8 +1140,9 @@ void BMI160Sensor::getMagnetometerXYZFromBuffer(uint8_t* data, int16_t* x, int16
         *y = ((int16_t)data[3] << 8) | data[2];
         *z = ((int16_t)data[5] << 8) | data[4];
     #elif BMI160_MAG_TYPE == BMI160_MAG_TYPE_MMC
-        // qmc5883l -> 0 lsb 1 msb
+        // mmc5603nj -> 0 msb 1 lsb
         // XYZ order
+        // uint + 32768 format
         *x = (((uint16_t)data[0] << 8) | data[1])-32768;
         *y = (((uint16_t)data[2] << 8) | data[3])-32768;
         *z = (((uint16_t)data[4] << 8) | data[5])-32768;
