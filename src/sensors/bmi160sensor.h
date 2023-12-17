@@ -37,9 +37,9 @@
 
 #if BMI160_USE_VQF
     #if USE_6_AXIS
-        #define BMI160_GYRO_RATE BMI160_GYRO_RATE_400HZ
+        #define BMI160_GYRO_RATE BMI160_GYRO_RATE_800HZ
     #else
-        #define BMI160_GYRO_RATE BMI160_GYRO_RATE_50HZ
+        #define BMI160_GYRO_RATE BMI160_GYRO_RATE_800HZ
     #endif
 #else
     #if USE_6_AXIS
@@ -49,7 +49,7 @@
     #endif
 #endif
 #define BMI160_GYRO_RANGE BMI160_GYRO_RANGE_1000
-#define BMI160_GYRO_FILTER_MODE BMI160_DLPF_MODE_NORM
+#define BMI160_GYRO_FILTER_MODE BMI160_DLPF_MODE_OSR4
 
 #define BMI160_ACCEL_RATE BMI160_ACCEL_RATE_50HZ
 #define BMI160_ACCEL_RANGE BMI160_ACCEL_RANGE_4G
@@ -83,7 +83,7 @@ constexpr float BMI160_FIFO_AVG_DATA_FRAME_LENGTH = (
     BMI160_ODR_ACC_HZ * BMI160_FIFO_A_LEN +
     BMI160_ODR_MAG_HZ * BMI160_FIFO_M_LEN
 ) / BMI160_SETTINGS_MAX_ODR_HZ;
-constexpr float BMI160_FIFO_READ_BUFFER_SIZE_MICROS = 300000;
+constexpr float BMI160_FIFO_READ_BUFFER_SIZE_MICROS = samplingRateInMillis*1000*1.5;
 constexpr float BMI160_FIFO_READ_BUFFER_SIZE_SAMPLES =
     BMI160_SETTINGS_MAX_ODR_HZ * BMI160_FIFO_READ_BUFFER_SIZE_MICROS / 1e6f;
 constexpr uint16_t BMI160_FIFO_MAX_LENGTH = 1024;
@@ -132,7 +132,6 @@ class BMI160Sensor : public Sensor {
         void initHMC(BMI160MagRate magRate);
         void initQMC(BMI160MagRate magRate);
         void initMMC();
-        void calcMMCOffset();
 
         void motionSetup() override final;
         void motionLoop() override final;
@@ -216,8 +215,8 @@ class BMI160Sensor : public Sensor {
         sensor_real_t Axyz[3] = {0};
         sensor_real_t Mxyz[3] = {0};
         sensor_real_t lastAxyz[3] = {0};
-        int16_t mmcOffset[3] = {0};
-        uint32_t lastMagOffCalc = 0;
+
+        uint8_t lx = 0, ly = 0, lz = 0;
 
         double gscaleX = BMI160_GSCALE;
         double gscaleY = BMI160_GSCALE;

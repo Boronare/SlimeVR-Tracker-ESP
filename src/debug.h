@@ -51,7 +51,7 @@
 // #define PRINT_STATE_EVERY_MS 60000
 
 // Determines how often we sample and send data
-#define samplingRateInMillis 20
+#define samplingRateInMillis 16
 
 // Sleeping options
 #define POWERSAVING_MODE POWER_SAVING_MODERATE  // Minimum causes sporadic data pauses
