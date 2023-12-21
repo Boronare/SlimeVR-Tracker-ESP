@@ -398,14 +398,14 @@ void BMI160Sensor::motionLoop() {
             lastRotationPacketSent = now - (elapsed - sendInterval);
 
             fusedRotation = sfusion.getQuaternionQuat();
-            float lastAcceleration[]{acceleration[0],acceleration[1],acceleration[2]};
+            float lastAcceleration[]{acceleration.x,acceleration.y,acceleration.z};
             acceleration=sfusion.getLinearAccVec();
             if(!OPTIMIZE_UPDATES ||!(abs(lastAcceleration[0])<0.15 &&
                                     abs(lastAcceleration[1])<0.15 && 
                                     abs(lastAcceleration[2])<0.15 &&
-                                    abs(acceleration[0])<0.15 &&
-                                    abs(acceleration[1])<0.15 && 
-                                    abs(acceleration[2])<0.15))
+                                    abs(acceleration.x)<0.15 &&
+                                    abs(acceleration.y)<0.15 && 
+                                    abs(acceleration.z)<0.15))
                 setAccelerationReady();
 
             fusedRotation *= sensorOffset;
@@ -583,16 +583,11 @@ void BMI160Sensor::onAccelRawSample(uint32_t dtMicros, int16_t x, int16_t y, int
     #if BMI160_DEBUG
         accReads++;
     #endif
-
     Axyz[0] = (sensor_real_t)x;
     Axyz[1] = (sensor_real_t)y;
     Axyz[2] = (sensor_real_t)z;
     applyAccelCalibrationAndScale(Axyz);
     remapGyroAccel(&Axyz[0], &Axyz[1], &Axyz[2]);
-    lastAxyz[0] = Axyz[0];
-    lastAxyz[1] = Axyz[1];
-    lastAxyz[2] = Axyz[2];
-
     sfusion.updateAcc(Axyz, dtMicros);
 
     optimistic_yield(100);
@@ -979,16 +974,19 @@ void BMI160Sensor::maybeCalibrateMag() {
     #endif
 
     ledManager.off();
-    constexpr int CaliSamples=240;
+    constexpr uint8_t CaliSamples=240;
     constexpr int MagTolerance=40;
     int16_t Cx[CaliSamples]={},Cy[CaliSamples]={},Cz[CaliSamples]={};
     uint8_t Cf=0, Cr=CaliSamples-1;
     int8_t ignoreList[CaliSamples]={};
     float cali[4][3];
+    int16_t mx,my,mz;
     MagnetoCalibration* magneto = new MagnetoCalibration();
+    imu.waitForMagDrdy();
+    imu.getMagnetometer(&mx,&my,&mz);
+    Cx[0]=mx; Cy[0]=my;Cz[0]=mz;
 
     while(Cf!=Cr){
-        int16_t mx,my,mz;
         imu.waitForMagDrdy();
         imu.getMagnetometer(&mx,&my,&mz);
         ledManager.on();
