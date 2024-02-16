@@ -50,13 +50,13 @@ void Sensor::sendData() {
         m_Logger.trace("Quaternion: %f, %f, %f, %f", UNPACK_QUATERNION(fusedRotation));
 #endif
 
+    }
 #if SEND_ACCELERATION
         if (newAcceleration) {
             newAcceleration = false;
             networkConnection.sendSensorAcceleration(sensorId, acceleration);
         }
 #endif
-    }
 }
 
 void Sensor::printTemperatureCalibrationUnsupported() {

@@ -18,20 +18,12 @@
 #define NaN std::numeric_limits<sensor_real_t>::quiet_NaN()
 
 struct RestDetectionParams {
-    sensor_real_t biasClip;
-    sensor_real_t biasSigmaRest;
-    uint32_t restMinTimeMicros;
-    sensor_real_t restFilterTau;
-    sensor_real_t restThGyr;
-    sensor_real_t restThAcc;
-    RestDetectionParams():
-        biasClip(2.0f),
-        biasSigmaRest(0.03f),
-        restMinTimeMicros(1.5 * 1e6),
-        restFilterTau(0.5f),
-        restThGyr(2.0f),
-        restThAcc(0.5f)
-    { }
+    sensor_real_t biasClip=2.0;
+    sensor_real_t biasSigmaRest=0.03;
+    uint32_t restMinTimeMicros=1.5*1e6;
+    sensor_real_t restFilterTau=0.5f;
+    sensor_real_t restThGyr=2.0f;
+    sensor_real_t restThAcc=0.5f;
 };
 
 inline sensor_real_t square(sensor_real_t x) { return x * x; }

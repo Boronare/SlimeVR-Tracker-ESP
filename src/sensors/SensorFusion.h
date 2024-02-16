@@ -6,7 +6,7 @@
 
 #define SENSOR_DOUBLE_PRECISION 0
 
-#define SENSOR_FUSION_TYPE SENSOR_FUSION_VQF
+#define SENSOR_FUSION_TYPE SENSOR_FUSION_BASICVQF
 
 #define SENSOR_FUSION_MAHONY 1
 #define SENSOR_FUSION_MADGWICK 2
@@ -47,7 +47,7 @@ namespace SlimeVR
                 motionBiasEstEnabled = false;
                 #endif
                 tauAcc = 2.0f;
-                tauMag = 6.0f;
+                tauMag = 2.0f;
                 restMinT = 2.0f;
                 restThGyr = 0.6f; // 400 norm
                 restThAcc = 0.06f; // 100 norm

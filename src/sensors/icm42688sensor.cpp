@@ -26,8 +26,6 @@
 #include "calibration.h"
 #include "magneto1.4.h"
 #include "GlobalVars.h"
-#include "mahony.h"
-// #include "madgwick.h"
 
 constexpr float gscale = (2000. / 32768.0) * (PI / 180.0); // gyro LSB/d/s -> rad/s
 constexpr float ascale = (8. / 32768.) * CONST_EARTH_GRAVITY; // accel LSB/G -> m/s^2

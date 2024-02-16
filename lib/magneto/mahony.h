@@ -32,7 +32,7 @@ class Mahony {
     // These are the free parameters in the Mahony filter and fusion scheme,
     // Kp for proportional feedback, Ki for integral
     // with MPU-9250, angles start oscillating at Kp=40. Ki does not seem to help and is not required.
-    static constexpr float Kp = 10.0f;
+    static constexpr float Kp = 1.0f;
     static constexpr float Ki = 0.0f;
 
 public:

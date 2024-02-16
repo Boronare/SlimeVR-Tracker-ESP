@@ -16,6 +16,9 @@
     #elif IMU == IMU_QMI8658
         #define PRIMARY_IMU_ADDRESS_ONE 0x6B
         #define PRIMARY_IMU_ADDRESS_TWO 0x6A
+    #elif IMU == IMU_LSM6DSR
+        #define PRIMARY_IMU_ADDRESS_ONE 0x6A
+        #define PRIMARY_IMU_ADDRESS_TWO 0x6B
     #endif
 
     #if SECOND_IMU == IMU_BNO080 || SECOND_IMU == IMU_BNO085 || SECOND_IMU == IMU_BNO086
@@ -30,6 +33,9 @@
     #elif SECOND_IMU == IMU_QMI8658
         #define SECONDARY_IMU_ADDRESS_ONE 0x6B
         #define SECONDARY_IMU_ADDRESS_TWO 0x6A
+    #elif SECOND_IMU == IMU_LSM6DSR
+        #define SECONDARY_IMU_ADDRESS_ONE 0x6A
+        #define SECONDARY_IMU_ADDRESS_TWO 0x6B
     #endif
 
 #else
