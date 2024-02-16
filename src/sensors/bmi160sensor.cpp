@@ -240,14 +240,10 @@ void BMI160Sensor::motionSetup() {
 
     isGyroCalibrated = hasGyroCalibration();
     isAccelCalibrated = hasAccelCalibration();
-    #if !USE_6_AXIS
     isMagCalibrated = hasMagCalibration();
-    #endif
     m_Logger.info("Calibration data for gyro: %s", isGyroCalibrated ? "found" : "not found");
     m_Logger.info("Calibration data for accel: %s", isAccelCalibrated ? "found" : "not found");
-    #if !USE_6_AXIS
     m_Logger.info("Calibration data for mag: %s", isMagCalibrated ? "found" : "not found");
-    #endif
 
     imu.setFIFOHeaderModeEnabled(true);
     imu.setGyroFIFOEnabled(true);
@@ -285,7 +281,7 @@ void BMI160Sensor::motionLoop() {
     #endif
     {
         uint32_t now = micros();
-        constexpr uint32_t BMI160_TARGET_SYNC_INTERVAL_MICROS = 10000;
+        constexpr uint32_t BMI160_TARGET_SYNC_INTERVAL_MICROS = 25000;
         uint32_t elapsed = now - lastClockPollTime;
         if (elapsed >= BMI160_TARGET_SYNC_INTERVAL_MICROS) {
             lastClockPollTime = now - (elapsed - BMI160_TARGET_SYNC_INTERVAL_MICROS);
@@ -335,7 +331,7 @@ void BMI160Sensor::motionLoop() {
         uint32_t now = micros();
         constexpr uint32_t BMI160_TARGET_POLL_INTERVAL_MICROS = 6000;
         uint32_t elapsed = now - lastPollTime;
-        if (elapsed >= BMI160_TARGET_POLL_INTERVAL_MICROS) {
+        // if (elapsed >= BMI160_TARGET_POLL_INTERVAL_MICROS) {
             lastPollTime = now - (elapsed - BMI160_TARGET_POLL_INTERVAL_MICROS);
 
             #if BMI160_DEBUG
@@ -369,7 +365,7 @@ void BMI160Sensor::motionLoop() {
             optimistic_yield(100);
             if (!sfusion.isUpdated()) return;
             sfusion.clearUpdated();
-        }
+        // }
     }
 
     {
@@ -427,7 +423,6 @@ void BMI160Sensor::readFIFO() {
         #endif
         return;
     }
-
     if (fifo.length <= 1){
         
         if (!imu.getGyroFIFOEnabled()) {
@@ -455,10 +450,10 @@ void BMI160Sensor::readFIFO() {
             imu.setFIFOHeaderModeEnabled(true);
             imu.setGyroFIFOEnabled(true);
             imu.setAccelFIFOEnabled(false);
-            delay(4);
+            Serial.printf("RESETFIFO\n");
             imu.resetFIFO();
-            delay(2);
         }
+        Serial.printf("FIFOLengthLow\n");
         return;
     }
     if (fifo.length > sizeof(fifo.data)) {
@@ -466,13 +461,16 @@ void BMI160Sensor::readFIFO() {
             numFIFODropped++;
         #endif
         imu.resetFIFO();
+        Serial.printf("FIFOLengthERR\n");
         return;
+        // fifo.length = sizeof(fifo.data);
     }
     std::fill(fifo.data, fifo.data + fifo.length, 0);
     if (!imu.getFIFOBytes(fifo.data, fifo.length)) {
         #if BMI160_DEBUG
             numFIFOFailedReads++;
         #endif
+        Serial.printf("FIFOReadERR\n");
         return;
     }
 
@@ -480,7 +478,7 @@ void BMI160Sensor::readFIFO() {
 
     int16_t gx, gy, gz;
     int32_t sgx = 0, sgy = 0, sgz = 0;
-    uint8_t samples = 0;
+    int16_t samples = 0;
     int16_t ax, ay, az;
     #if !USE_6_AXIS
         int16_t mx, my, mz;
@@ -513,6 +511,7 @@ void BMI160Sensor::readFIFO() {
             i += BMI160_FIFO_INPUT_CONFIG_LEN;
         } else if (header & BMI160_FIFO_HEADER_DATA_FRAME_BASE) {
             if (!(header & BMI160_FIFO_HEADER_DATA_FRAME_MASK_HAS_DATA)) {
+        Serial.printf("FIFOHeaderERR\n");
                 break;
             }
 
@@ -530,10 +529,11 @@ void BMI160Sensor::readFIFO() {
                 i += BMI160_FIFO_G_LEN;
             }
         } else {
+        Serial.printf("FIFOHeaderCaseERR\n");
             break;
         }
     }
-    if(samples){
+    if(samples>0){
         gx = (sgx+lx)/samples;
         lx = (sgx+lx)%samples;
         gy = (sgy+ly)/samples;
@@ -739,6 +739,11 @@ void BMI160Sensor::startCalibration(int calibrationType) {
     #if(USE_6_AXIS)
     maybeCalibrateGyro();
     maybeCalibrateAccel();
+    if(!hasMagCalibration()){
+        initMMC();
+        delay(10);
+        maybeCalibrateMag();
+    };
     #else
     if(!hasGyroCalibration()){
         maybeCalibrateGyro();
@@ -963,7 +968,6 @@ void BMI160Sensor::maybeCalibrateAccel() {
 }
 
 void BMI160Sensor::maybeCalibrateMag() {
-#if !USE_6_AXIS
     #ifndef BMI160_CALIBRATION_MAG_SECONDS
         static_assert(false, "BMI160_CALIBRATION_MAG_SECONDS not set in defines");
     #endif
@@ -1095,7 +1099,6 @@ void BMI160Sensor::maybeCalibrateMag() {
         m_Logger.debug("  %f, %f, %f, %f", cali[0][i], cali[1][i], cali[2][i], cali[3][i]);
     }
     m_Logger.debug("}");
-#endif
 }
 
 void BMI160Sensor::remapGyroAccel(sensor_real_t* x, sensor_real_t* y, sensor_real_t* z) {
