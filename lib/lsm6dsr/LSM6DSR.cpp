@@ -84,12 +84,18 @@ void LSM6DSR::initialize(uint8_t addr,
 {
     devAddr = addr;
     setRegister(LSM6DSR_CTRL3_C, 0b00000011); // SW_RESET
-    delay(20);
+    delay(50);
     setGyroRate(gyroRate);
     setAccelRate(accelRate);
     setFullScaleGyroRange(gyroRange);
     setFullScaleAccelRange(accelRange);
     setTimestampEnabled(true);
+    
+    setRegister(LSM6DSR_CTRL4_C, 0b00000010);//Enable LPF
+    // setRegister(LSM6DSR_CTRL6_C, 0b00010010);
+    // setRegister(LSM6DSR_CTRL7_G, 0b01010000);//Enable HPF
+
+    delay(50);
 }
 
 /** Read a LSM6DSR register directly.

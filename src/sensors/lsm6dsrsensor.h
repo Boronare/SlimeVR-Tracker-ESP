@@ -43,7 +43,7 @@
 
 // note: if changing ODR or filter modes - adjust rest detection params and buffer size
 
-constexpr float LSM6DSR_ODR_GYR_HZ = 417;
+constexpr float LSM6DSR_ODR_GYR_HZ = 416;
 constexpr float LSM6DSR_ODR_ACC_HZ = 52;
 constexpr float LSM6DSR_ODR_GYR_MICROS = 1.0f / LSM6DSR_ODR_GYR_HZ * 1e6f;
 constexpr float LSM6DSR_ODR_ACC_MICROS = 1.0f / LSM6DSR_ODR_ACC_HZ * 1e6f;
@@ -54,15 +54,15 @@ constexpr float LSM6DSR_ODR_MAG_MICROS = 1.0f / LSM6DSR_ODR_MAG_HZ * 1e6f;
 
 
 // Typical sensitivity
-constexpr double LSM6DSR_GYRO_TYPICAL_SENSITIVITY_MDPS = 35.0f;
+constexpr double LSM6DSR_GYRO_TYPICAL_SENSITIVITY_MDPS = 33.2f;
 
 constexpr std::pair<uint8_t, float> LSM6DSR_ACCEL_SENSITIVITY_LSB_MAP[] = {
     {LSM6DSR_2g, 16384.0f},
+    {LSM6DSR_16g, 2048.0f},
     {LSM6DSR_4g, 8192.0f},
-    {LSM6DSR_8g, 4096.0f},
-    {LSM6DSR_16g, 2048.0f}
+    {LSM6DSR_8g, 4096.0f}
 };
-constexpr double LSM6DSR_ACCEL_TYPICAL_SENSITIVITY_LSB = LSM6DSR_ACCEL_SENSITIVITY_LSB_MAP[LSM6DSR_ACCEL_RANGE / 4].second;
+constexpr double LSM6DSR_ACCEL_TYPICAL_SENSITIVITY_LSB = LSM6DSR_ACCEL_SENSITIVITY_LSB_MAP[LSM6DSR_ACCEL_RANGE].second;
 constexpr double LSM6DSR_ASCALE = CONST_EARTH_GRAVITY / LSM6DSR_ACCEL_TYPICAL_SENSITIVITY_LSB;
 
 // Scale conversion steps: LSB/°/s -> °/s -> step/°/s -> step/rad/s
@@ -105,7 +105,7 @@ class LSM6DSRSensor : public Sensor {
         bool hasAccelCalibration();
         bool hasMagCalibration();
 
-        void onGyroRawSample(uint32_t dtMicros, int16_t x, int16_t y, int16_t z);
+        void onGyroRawSample(uint32_t dtMicros, float x, float y, float z);
         void onAccelRawSample(uint32_t dtMicros, int16_t x, int16_t y, int16_t z);
         void onMagRawSample(uint32_t dtMicros, int16_t x, int16_t y, int16_t z);
         void readFIFO();
@@ -136,6 +136,8 @@ class LSM6DSRSensor : public Sensor {
         uint32_t samplesSinceClockSync = 0;
         uint32_t timestamp0 = 0;
         uint32_t timestamp1 = 0;
+
+        int8_t lx = 0, ly = 0, lz = 0;
 
         // scheduling
         uint32_t lastPollTime = micros();

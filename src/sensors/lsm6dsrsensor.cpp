@@ -91,6 +91,7 @@ void LSM6DSRSensor::motionSetup() {
 
     int16_t ax, ay, az;
     getRemappedAcceleration(&ax, &ay, &az);
+    Serial.printf("Acc : %d %d %d\n",ax,ay,az);
     float g_az = (float)az / LSM6DSR_ACCEL_TYPICAL_SENSITIVITY_LSB;
     if (g_az < -0.75f) {
         m_Logger.info("Flip front to confirm start calibration");
@@ -278,8 +279,10 @@ void LSM6DSRSensor::readFIFO() {
     optimistic_yield(100);
 
     int16_t gx, gy, gz;
+    int32_t sgx = 0, sgy = 0, sgz = 0;
     int16_t ax, ay, az;
     int16_t mx, my, mz;
+    uint8_t samples = 0;
 
     // #if !USE_6_AXIS
     //     imu.getMagnetometer(&mx,&my,&mz);
@@ -289,7 +292,6 @@ void LSM6DSRSensor::readFIFO() {
     // onAccelRawSample(samplingRateInMillis*1000, ax, ay, az);
 
     for (uint32_t i = 0; i < fifo.length;i++) {
-        
         if (!imu.getFIFOBytes(fifo.data)) {
             #if BMI160_DEBUG
                 numFIFOFailedReads++;
@@ -315,8 +317,11 @@ void LSM6DSRSensor::readFIFO() {
             gy = (((int16_t)fifo.data[4]) << 8) | fifo.data[3];
             gz = (((int16_t)fifo.data[6]) << 8) | fifo.data[5];
             // Serial.printf("Gx:%d, Gy:%d, Gz:%d\n",gx,gy,gz);
-            onGyroRawSample((timestamp1-timestamp0)*25,gx,gy,gz);
-            timestamp0 = timestamp1;
+            sgx += gx;
+            sgy += gy;
+            sgz += gz;
+            samples++;
+
             break;
         case LSM6DSR_SENSORHUB_SLAVE1_TAG:
             mx = ((((int16_t)fifo.data[1]) << 8) | fifo.data[2])-32768;
@@ -336,9 +341,20 @@ void LSM6DSRSensor::readFIFO() {
             Serial.printf("UNKNOWN::%d\n",header);
         }
     }
+    if(samples){
+        // gx = (sgx+lx)/samples;
+        // lx = (sgx+lx)%samples;
+        // gy = (sgy+ly)/samples;
+        // ly = (sgy+ly)%samples;
+        // gz = (sgz+lz)/samples;
+        // lz = (sgz+lz)%samples;
+        // onGyroRawSample(sampleDtMicros*samples, gx, gy, gz);
+        onGyroRawSample((timestamp1-timestamp0)*25,(float)sgx/samples,(float)sgy/samples,(float)sgz/samples);
+        timestamp0 = timestamp1;
+    }
 }
 
-void LSM6DSRSensor::onGyroRawSample(uint32_t dtMicros, int16_t x, int16_t y, int16_t z) {
+void LSM6DSRSensor::onGyroRawSample(uint32_t dtMicros, float x, float y, float z) {
     #if BMI160_DEBUG
         gyrReads++;
     #endif
@@ -529,15 +545,15 @@ bool LSM6DSRSensor::hasMagCalibration() {
 }
 
 void LSM6DSRSensor::startCalibration(int calibrationType) {
+    SlimeVR::Configuration::CalibrationConfig calibration;
+    calibration.type = SlimeVR::Configuration::CalibrationConfigType::BMI160;
     ledManager.on();
     #if(USE_6_AXIS)
     maybeCalibrateGyro();
+    calibration.data.bmi160 = m_Calibration;
+    configuration.setCalibration(sensorId, calibration);
+    configuration.save();
     maybeCalibrateAccel();
-    if(!hasMagCalibration()){
-        initMMC();
-        delay(10);
-        maybeCalibrateMag();
-    };
     #else
     if(!hasGyroCalibration()){
         maybeCalibrateGyro();
@@ -547,11 +563,20 @@ void LSM6DSRSensor::startCalibration(int calibrationType) {
     #endif
     m_Logger.debug("Saving the calibration data");
 
-    SlimeVR::Configuration::CalibrationConfig calibration;
-    calibration.type = SlimeVR::Configuration::CalibrationConfigType::BMI160;
     calibration.data.bmi160 = m_Calibration;
     configuration.setCalibration(sensorId, calibration);
     configuration.save();
+    
+    if(!hasMagCalibration()){
+        initMMC();
+        delay(10);
+        int16_t mx,my,mz;
+        imu.getMagnetometer(&mx,&my,&mz);
+        int16_t px=mx,py=my,pz=mz;
+        while(mx==px && my==py && mz==pz){
+            imu.getMagnetometer(&mx,&my,&mz);
+        }
+    };
 
     m_Logger.debug("Saved the calibration data");
 
@@ -878,6 +903,7 @@ void LSM6DSRSensor::maybeCalibrateMag() {
                     Cr -= CaliSamples;
             }
         }
+        delay(10);
     }
     delete magneto;
 
