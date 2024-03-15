@@ -288,7 +288,7 @@ void LSM6DSRSensor::readFIFO() {
     // imu.getAcceleration(&ax,&ay,&az);
     // onAccelRawSample(samplingRateInMillis*1000, ax, ay, az);
 
-    for (uint32_t i = 0; i < fifo.length;) {
+    for (uint32_t i = 0; i < fifo.length;i++) {
         
         if (!imu.getFIFOBytes(fifo.data)) {
             #if BMI160_DEBUG
@@ -308,13 +308,13 @@ void LSM6DSRSensor::readFIFO() {
                 (((uint32_t)fifo.data[2]) << 8)  |
                 ((uint32_t)fifo.data[1])
             );
-            Serial.printf("Timestamp:%d\n",timestamp1);
+            // Serial.printf("Timestamp:%d\n",timestamp1);
             break;
         case LSM6DSR_GYRO_NC_TAG:
             gx = (((int16_t)fifo.data[2]) << 8) | fifo.data[1];
             gy = (((int16_t)fifo.data[4]) << 8) | fifo.data[3];
             gz = (((int16_t)fifo.data[6]) << 8) | fifo.data[5];
-            Serial.printf("Gx:%d, Gy:%d, Gz:%d\n",gx,gy,gz);
+            // Serial.printf("Gx:%d, Gy:%d, Gz:%d\n",gx,gy,gz);
             onGyroRawSample((timestamp1-timestamp0)*25,gx,gy,gz);
             timestamp0 = timestamp1;
             break;
@@ -322,14 +322,14 @@ void LSM6DSRSensor::readFIFO() {
             mx = ((((int16_t)fifo.data[1]) << 8) | fifo.data[2])-32768;
             my = ((((int16_t)fifo.data[3]) << 8) | fifo.data[4])-32768;
             mz = ((((int16_t)fifo.data[5]) << 8) | fifo.data[6])-32768;
-            Serial.printf("Mx:%d, My:%d, Mz:%d\n",mx,my,mz);
+            // Serial.printf("Mx:%d, My:%d, Mz:%d\n",mx,my,mz);
             onMagRawSample(LSM6DSR_ODR_MAG_MICROS,mx,my,mz);
             break;
         case LSM6DSR_XL_NC_TAG:
-            gx = (((int16_t)fifo.data[2]) << 8) | fifo.data[1];
-            gy = (((int16_t)fifo.data[4]) << 8) | fifo.data[3];
-            gz = (((int16_t)fifo.data[6]) << 8) | fifo.data[5];
-            Serial.printf("Ax:%d, Ay:%d, Az:%d\n",ax,ay,az);
+            ax = (((int16_t)fifo.data[2]) << 8) | fifo.data[1];
+            ay = (((int16_t)fifo.data[4]) << 8) | fifo.data[3];
+            az = (((int16_t)fifo.data[6]) << 8) | fifo.data[5];
+            // Serial.printf("Ax:%d, Ay:%d, Az:%d\n",ax,ay,az);
             onAccelRawSample(LSM6DSR_ODR_ACC_MICROS,ax,ay,az);
             break;
         default:

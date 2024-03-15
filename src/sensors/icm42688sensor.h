@@ -52,7 +52,9 @@ private:
     float Axyz[3]{};
     float Gxyz[3]{};
     float Mxyz[3]{};
-
+    float Gbias[3]{};
+    float Gavg[3]{};
+    float Gdev[3]{};
     SlimeVR::Sensors::SensorFusion sfusion;
 
     SlimeVR::Configuration::ICM42688CalibrationConfig m_Calibration;

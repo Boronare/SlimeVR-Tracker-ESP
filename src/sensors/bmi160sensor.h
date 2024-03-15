@@ -35,7 +35,7 @@
 #include "../motionprocessing/GyroTemperatureCalibrator.h"
 #include "../motionprocessing/RestDetection.h"
 
-#define BMI160_GYRO_RATE BMI160_GYRO_RATE_800HZ
+#define BMI160_GYRO_RATE BMI160_GYRO_RATE_400HZ
 #define BMI160_GYRO_RANGE BMI160_GYRO_RANGE_1000
 #define BMI160_GYRO_FILTER_MODE BMI160_DLPF_MODE_OSR4
 
@@ -143,7 +143,7 @@ class BMI160Sensor : public Sensor {
         bool hasAccelCalibration();
         bool hasMagCalibration();
 
-        void onGyroRawSample(uint32_t dtMicros, int16_t x, int16_t y, int16_t z);
+        void onGyroRawSample(uint32_t dtMicros, float x, float y, float z);
         void onAccelRawSample(uint32_t dtMicros, int16_t x, int16_t y, int16_t z);
         void onMagRawSample(uint32_t dtMicros, int16_t x, int16_t y, int16_t z);
         void readFIFO();
@@ -200,6 +200,8 @@ class BMI160Sensor : public Sensor {
         sensor_real_t Gxyz[3] = {0};
         sensor_real_t Axyz[3] = {0};
         sensor_real_t Mxyz[3] = {0};
+        float Gavg[3]{};
+        float Gdev[3]{};
         
         int8_t lx = 0, ly = 0, lz = 0;
 

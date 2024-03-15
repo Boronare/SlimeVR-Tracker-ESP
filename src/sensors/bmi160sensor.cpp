@@ -102,7 +102,7 @@ void BMI160Sensor::initMMC(){    /* Configure MAG interface and setup mode */
     imu.setMagRegister(0x1C, 0x00);
     delay(3);
     //Set ODR
-    imu.setMagRegister(0x1A, 25);
+    imu.setMagRegister(0x1A, 10);
     delay(3);
     //Enable Continuous mode & Auto SR
     imu.setMagRegister(0x1B, 0xA0);
@@ -477,8 +477,8 @@ void BMI160Sensor::readFIFO() {
     optimistic_yield(100);
 
     int16_t gx, gy, gz;
-    int32_t sgx = 0, sgy = 0, sgz = 0;
-    int16_t samples = 0;
+    float sgx = 0, sgy = 0, sgz = 0;
+    int8_t samples = 0;
     int16_t ax, ay, az;
     #if !USE_6_AXIS
         int16_t mx, my, mz;
@@ -534,17 +534,33 @@ void BMI160Sensor::readFIFO() {
         }
     }
     if(samples>0){
-        gx = (sgx+lx)/samples;
-        lx = (sgx+lx)%samples;
-        gy = (sgy+ly)/samples;
-        ly = (sgy+ly)%samples;
-        gz = (sgz+lz)/samples;
-        lz = (sgz+lz)%samples;
-        onGyroRawSample(BMI160_ODR_GYR_MICROS*samples, gx, gy, gz);
+        sgx = (sgx)/samples;
+        // lx = (sgx+lx)%samples;
+        sgy = (sgy)/samples;
+        // ly = (sgy+ly)%samples;
+        sgz = (sgz)/samples;
+        // lz = (sgz+lz)%samples;
+        float dev[3];
+        for(uint8_t k=0;k<3;k++){
+            float gval = k==0?sgx:k==1?sgy:sgz;
+            Gavg[k]=0.95*Gavg[k]+0.05*gval;
+            dev[k]=sq(m_Calibration.G_off[k]-gval);
+            Gdev[k]=0.95*Gdev[k]+0.05*sq(Gavg[k]-gval);
+        }
+        Serial.printf("Gdev: %+f %+f %+f / %+f %+f %+f\n",Gdev[0],Gdev[1],Gdev[2],dev[0],dev[1],dev[2]);
+        // if(Gdev[0]<0.00020/sq(BMI160_GSCALE)&&Gdev[1]<0.00020/sq(BMI160_GSCALE)&&Gdev[2]<0.00020/sq(BMI160_GSCALE)
+        //         &&(dev[0]<0.00003/sq(BMI160_GSCALE)&&dev[1]<0.00003/sq(BMI160_GSCALE)&&dev[2]<0.00003/sq(BMI160_GSCALE))){
+        //     m_Calibration.G_off[0]=m_Calibration.G_off[0]*0.95+sgx*0.05;
+        //     m_Calibration.G_off[1]=m_Calibration.G_off[1]*0.95+sgy*0.05;
+        //     m_Calibration.G_off[2]=m_Calibration.G_off[2]*0.95+sgz*0.05;
+        //     ledManager.on();
+        // }
+        // else ledManager.off();
+        onGyroRawSample(BMI160_ODR_GYR_MICROS*samples, sgx, sgy, sgz);
     }
 }
 
-void BMI160Sensor::onGyroRawSample(uint32_t dtMicros, int16_t x, int16_t y, int16_t z) {
+void BMI160Sensor::onGyroRawSample(uint32_t dtMicros, float x, float y, float z) {
     #if BMI160_DEBUG
         gyrReads++;
     #endif
@@ -739,11 +755,6 @@ void BMI160Sensor::startCalibration(int calibrationType) {
     #if(USE_6_AXIS)
     maybeCalibrateGyro();
     maybeCalibrateAccel();
-    if(!hasMagCalibration()){
-        initMMC();
-        delay(10);
-        maybeCalibrateMag();
-    };
     #else
     if(!hasGyroCalibration()){
         maybeCalibrateGyro();
@@ -758,6 +769,11 @@ void BMI160Sensor::startCalibration(int calibrationType) {
     calibration.data.bmi160 = m_Calibration;
     configuration.setCalibration(sensorId, calibration);
     configuration.save();
+    if(!hasMagCalibration()){
+        initMMC();
+        delay(10);
+        imu.waitForMagDrdy();
+    };
 
     m_Logger.debug("Saved the calibration data");
 

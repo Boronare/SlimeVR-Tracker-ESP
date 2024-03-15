@@ -27,8 +27,10 @@
 #include "magneto1.4.h"
 #include "GlobalVars.h"
 
-constexpr float gscale = (2000. / 32768.0) * (PI / 180.0); // gyro LSB/d/s -> rad/s
-constexpr float ascale = (8. / 32768.) * CONST_EARTH_GRAVITY; // accel LSB/G -> m/s^2
+constexpr float gscale = (1000. / 32768.0) * (PI / 180.0); // gyro LSB/d/s -> rad/s
+constexpr float ascale = (4. / 32768.) * CONST_EARTH_GRAVITY; // accel LSB/G -> m/s^2
+constexpr float godr = 200.0;
+#define GODR GODR_200Hz
 
 void ICM42688Sensor::motionSetup() {
     // initialize device
@@ -65,12 +67,12 @@ void ICM42688Sensor::motionSetup() {
     I2Cdev::readByte(addr, ICM42688_INT_STATUS, &temp); // clear reset done int flag
     I2Cdev::writeByte(addr, ICM42688_INT_SOURCE0, 0); // disable ints
     I2Cdev::writeByte(addr, ICM42688_REG_BANK_SEL, 0x00); // select register bank 0
-    I2Cdev::writeByte(addr, ICM42688_PWR_MGMT0, gMode_LN << 2 | aMode_LN); // set accel and gyro modes (low noise)
+    I2Cdev::writeByte(addr, ICM42688_PWR_MGMT0, gMode_LN << 2 | aMode_LP); // set accel and gyro modes (low noise)
     delay(1); // wait >200us (datasheet 14.36)
-    I2Cdev::writeByte(addr, ICM42688_ACCEL_CONFIG0, AFS_8G << 5 | AODR_200Hz); // set accel ODR and FS (200hz, 8g)
-    I2Cdev::writeByte(addr, ICM42688_GYRO_CONFIG0, GFS_2000DPS << 5 | GODR_1kHz); // set gyro ODR and FS (1khz, 2000dps)
+    I2Cdev::writeByte(addr, ICM42688_ACCEL_CONFIG0, AFS_4G << 5 | AODR_50Hz); // set accel ODR and FS (200hz, 8g)
+    I2Cdev::writeByte(addr, ICM42688_GYRO_CONFIG0, GFS_1000DPS << 5 | GODR); // set gyro ODR and FS (1khz, 2000dps)
     I2Cdev::writeByte(addr, ICM42688_GYRO_ACCEL_CONFIG0, 0x44); // set gyro and accel bandwidth to ODR/10
-	delay(50); // 10ms Accel, 30ms Gyro startup
+	delay(100); // 10ms Accel, 30ms Gyro startup
 
     if (magExists) {
         I2Cdev::writeByte(addr_mag, MMC5983MA_CONTROL_0, 0x08); // SET
@@ -83,14 +85,12 @@ void ICM42688Sensor::motionSetup() {
     // turn on while flip back to calibrate. then, flip again after 5 seconds.
     // TODO: Move calibration invoke after calibrate button on slimeVR server available
     accel_read();
-    if(Gxyz[2] < -0.75f) {
-        ledManager.on();
+    if(Axyz[2] < -0.75f) {
         m_Logger.info("Flip front to confirm start calibration");
-        delay(5000);
-        ledManager.off();
+        ledManager.pattern(500,500,3);
 
         accel_read();
-        if(Gxyz[2] > 0.75f) {
+        if(Axyz[2] > 0.75f) {
             m_Logger.debug("Starting calibration...");
             startCalibration(0);
         }
@@ -121,7 +121,7 @@ void ICM42688Sensor::motionSetup() {
     I2Cdev::readByte(addr, ICM42688_TMST_CONFIG, &temp); // disable FSYNC
     I2Cdev::writeByte(addr, ICM42688_TMST_CONFIG, temp & 0xfd); // disable FSYNC
     I2Cdev::writeByte(addr, ICM42688_FIFO_CONFIG1, 0x02); // enable FIFO gyro only
-    I2Cdev::writeByte(addr, ICM42688_FIFO_CONFIG, 1<<6); // begin FIFO stream
+    I2Cdev::writeByte(addr, ICM42688_FIFO_CONFIG, 0x40); // begin FIFO stream
 
     working = true;
     configured = true;
@@ -131,10 +131,10 @@ void ICM42688Sensor::motionLoop() {
 	uint8_t rawCount[2];
 	I2Cdev::readBytes(addr, ICM42688_FIFO_COUNTH, 2, &rawCount[0]);
 	uint16_t count = (uint16_t)(rawCount[0] << 8 | rawCount[1]); // Turn the 16 bits into a unsigned 16-bit value
-	count += 32; // Add a few read buffer packets (4 ms)
+	// count += 32; // Add a few read buffer packets (4 ms)
 	uint16_t packets = count / 8;								 // Packet size 8 bytes
-	uint8_t rawData[2080];
-    I2Cdev::readBytes(addr, ICM42688_FIFO_DATA, count, &rawData[0]); // Read buffer
+	uint8_t rawData[8];
+    // I2Cdev::readBytes(addr, ICM42688_FIFO_DATA, count, &rawData[0]); // Read buffer
 
     accel_read();
     parseAccelData();
@@ -145,27 +145,37 @@ void ICM42688Sensor::motionLoop() {
     }
 
 	for (uint16_t i = 0; i < packets; i++) {
-		uint16_t index = i * 8; // Packet size 8 bytes
+        I2Cdev::readBytes(addr, ICM42688_FIFO_DATA, 8, &rawData[0]); // Read buffer
+		constexpr uint16_t index = 0; // Packet size 8 bytes
+            // Serial.printf("\nHdr : %x ",rawData[index]);
 		if ((rawData[index] & 0x80) == 0x80) {
 			continue; // Skip empty packets
 		}
-		// combine into 16 bit values
-		float raw0 = (int16_t)((((int16_t)rawData[index + 1]) << 8) | rawData[index + 2]); // gx
-		float raw1 = (int16_t)((((int16_t)rawData[index + 3]) << 8) | rawData[index + 4]); // gy
-		float raw2 = (int16_t)((((int16_t)rawData[index + 5]) << 8) | rawData[index + 6]); // gz
-		if (raw0 < -32766 || raw1 < -32766 || raw2 < -32766) {
-			continue; // Skip invalid data
-		}
-		Gxyz[0] = raw0 * gscale; //gres
-		Gxyz[1] = raw1 * gscale; //gres
-		Gxyz[2] = raw2 * gscale; //gres
-        parseGyroData();
+        if ((rawData[index] & 0x20)){
+            // combine into 16 bit values
+            int16_t raw0 = (int16_t)((((int16_t)rawData[index + 1]) << 8) | rawData[index + 2]); // gx
+            int16_t raw1 = (int16_t)((((int16_t)rawData[index + 3]) << 8) | rawData[index + 4]); // gy
+            int16_t raw2 = (int16_t)((((int16_t)rawData[index + 5]) << 8) | rawData[index + 6]); // gz
+            if (raw0 < -32766 || raw1 < -32766 || raw2 < -32766) {
+                continue; // Skip invalid data
+            }
+            // Serial.printf("Gyr : %+5d / %+5d / %+5d",raw0,raw1,raw2);
+            Gxyz[0] = raw0 * gscale; //gres
+            Gxyz[1] = raw1 * gscale; //gres
+            Gxyz[2] = raw2 * gscale; //gres
+            for(uint8_t k=0;k<3;k++){
+                Gavg[k]=0.99*Gavg[k]+0.01*Gxyz[k];
+                Gdev[k]=0.99*Gdev[k]+0.01*sq(Gavg[k]-Gxyz[k]);
+                if(Gdev[k]<0.0001) m_Calibration.G_off[k]=m_Calibration.G_off[k]*0.99+Gavg[k]*0.01;
+            }
+            parseGyroData();
 
-        // TODO: mag axes will be different, make sure to change them???
-        sfusion.updateGyro(Gxyz);
+            // TODO: mag axes will be different, make sure to change them???
+            sfusion.updateGyro(Gxyz,1.0/godr);
+        }
     }
 
-    sfusion.updateAcc(Axyz);
+    // sfusion.updateAcc(Axyz);
 
     if (magExists)
         sfusion.updateMag(Mxyz);
@@ -214,15 +224,19 @@ void ICM42688Sensor::mag_read() {
 void ICM42688Sensor::startCalibration(int calibrationType) {
     ledManager.on();
     m_Logger.debug("Gathering raw data for device calibration...");
-    constexpr int calibrationSamples = 500;
+    constexpr int calibrationSamples = godr*5;
     double GxyzC[3] = {0, 0, 0};
 
     // Wait for sensor to calm down before calibration
     m_Logger.info("Put down the device and wait for baseline gyro reading calibration");
-    delay(2000);
+    ledManager.pattern(100,100,5);
 
     for (int i = 0; i < calibrationSamples; i++) {
-        delay(5);
+        uint8_t raw;
+        do{
+            I2Cdev::readByte(addr, ICM42688_INT_STATUS, &raw);
+            delayMicroseconds(100);
+        }while(!(raw&0x08));
         gyro_read();
         GxyzC[0] += Gxyz[0];
         GxyzC[1] += Gxyz[1];
@@ -231,6 +245,7 @@ void ICM42688Sensor::startCalibration(int calibrationType) {
     GxyzC[0] /= calibrationSamples;
     GxyzC[1] /= calibrationSamples;
     GxyzC[2] /= calibrationSamples;
+    ledManager.pattern(100,100,5);
 
 #ifdef DEBUG_SENSOR
     m_Logger.trace("Gyro calibration results: %f %f %f", GxyzC[0], GxyzC[1], GxyzC[2]);
@@ -240,61 +255,101 @@ void ICM42688Sensor::startCalibration(int calibrationType) {
     m_Calibration.G_off[0] = GxyzC[0];
     m_Calibration.G_off[1] = GxyzC[1];
     m_Calibration.G_off[2] = GxyzC[2];
+    //    MagnetoCalibration* magneto = new MagnetoCalibration();
 
-    // Blink calibrating led before user should rotate the sensor
-    m_Logger.info("Gently rotate the device while it's gathering accelerometer and magnetometer data");
-    ledManager.pattern(15, 300, 3000/310);
+    // m_Logger.info("Put the device into 6 unique orientations (all sides), leave it still and do not hold/touch for 3 seconds each");
 
-    MagnetoCalibration *magneto_acc = new MagnetoCalibration();
-    MagnetoCalibration *magneto_mag = new MagnetoCalibration();
+    //     RestDetectionParams calibrationRestDetectionParams;
+    //     calibrationRestDetectionParams.restMinTimeMicros = 0.5 * 1e6;
+    //     calibrationRestDetectionParams.restThAcc = 0.25f;
+    //     RestDetection calibrationRestDetection(
+    //         calibrationRestDetectionParams,
+    //         BMI160_ODR_GYR_MICROS / 1e6f,
+    //         BMI160_ODR_ACC_MICROS / 1e6f
+    //     );
 
-    // NOTE: we don't use the FIFO here on *purpose*. This makes the difference between a calibration that takes a second or three and a calibration that takes much longer.
-    for (int i = 0; i < calibrationSamples; i++) {
-        ledManager.on();
-        accel_read();
-        magneto_acc->sample(Axyz[0], Axyz[1], Axyz[2]);
-        mag_read();
-        magneto_mag->sample(Mxyz[0], Mxyz[1], Mxyz[2]);
+    //     constexpr uint16_t expectedPositions = 6;
+    //     constexpr uint16_t numSamplesPerPosition = 32;
 
-        ledManager.off();
-        delay(50);
-    }
-    m_Logger.debug("Calculating calibration data...");
+    //     uint16_t numPositionsRecorded = 0;
+    //     uint16_t numCurrentPositionSamples = 0;
+    //     bool waitForMotion = true;
 
-    float A_BAinv[4][3];
-    magneto_acc->current_calibration(A_BAinv);
-    delete magneto_acc;
+    //     float* accelCalibrationChunk = new float[numSamplesPerPosition * 3];
+    //     ledManager.pattern(100, 100, 6);
+    //     ledManager.on();
+    //     m_Logger.info("Gathering accelerometer data...");
+    //     m_Logger.info("Waiting for position %i, you can leave the device as is...", numPositionsRecorded + 1);
+    //     while (true) {
+    //         int16_t ax, ay, az;
+    //         imu.getAcceleration(&ax, &ay, &az);
+    //         sensor_real_t scaled[3];
+    //         scaled[0] = ax * BMI160_ASCALE;
+    //         scaled[1] = ay * BMI160_ASCALE;
+    //         scaled[2] = az * BMI160_ASCALE;
 
-    float M_BAinv[4][3];
-    if (magExists) {
-        magneto_mag->current_calibration(M_BAinv);
-    }
-    delete magneto_mag;
+    //         calibrationRestDetection.updateAcc(BMI160_ODR_ACC_MICROS, scaled);
 
-    m_Logger.debug("Finished Calculate Calibration data");
-    m_Logger.debug("Accelerometer calibration matrix:");
-    m_Logger.debug("{");
-    for (int i = 0; i < 3; i++)
-    {
-        m_Calibration.A_B[i] = A_BAinv[0][i];
-        m_Calibration.A_Ainv[0][i] = A_BAinv[1][i];
-        m_Calibration.A_Ainv[1][i] = A_BAinv[2][i];
-        m_Calibration.A_Ainv[2][i] = A_BAinv[3][i];
-        m_Logger.debug("  %f, %f, %f, %f", A_BAinv[0][i], A_BAinv[1][i], A_BAinv[2][i], A_BAinv[3][i]);
-    }
-    m_Logger.debug("}");
-    if (magExists) {
-        m_Logger.debug("[INFO] Magnetometer calibration matrix:");
-        m_Logger.debug("{");
-        for (int i = 0; i < 3; i++) {
-            m_Calibration.M_B[i] = M_BAinv[0][i];
-            m_Calibration.M_Ainv[0][i] = M_BAinv[1][i];
-            m_Calibration.M_Ainv[1][i] = M_BAinv[2][i];
-            m_Calibration.M_Ainv[2][i] = M_BAinv[3][i];
-            m_Logger.debug("  %f, %f, %f, %f", M_BAinv[0][i], M_BAinv[1][i], M_BAinv[2][i], M_BAinv[3][i]);
-        }
-        m_Logger.debug("}");
-    }
+    //         if (waitForMotion) {
+    //             if (!calibrationRestDetection.getRestDetected()) {
+    //                 waitForMotion = false;
+    //             }
+    //             delayMicroseconds(BMI160_ODR_ACC_MICROS);
+    //             continue;
+    //         }
+
+    //         if (calibrationRestDetection.getRestDetected()) {
+    //             ledManager.on();
+    //             const uint16_t i = numCurrentPositionSamples * 3;
+    //             accelCalibrationChunk[i + 0] = ax;
+    //             accelCalibrationChunk[i + 1] = ay;
+    //             accelCalibrationChunk[i + 2] = az;
+    //             numCurrentPositionSamples++;
+
+    //             if (numCurrentPositionSamples >= numSamplesPerPosition) {
+    //                 for (int i = 0; i < numSamplesPerPosition; i++) {
+    //                     magneto->sample(
+    //                         accelCalibrationChunk[i * 3 + 0],
+    //                         accelCalibrationChunk[i * 3 + 1],
+    //                         accelCalibrationChunk[i * 3 + 2]
+    //                     );
+    //                 }
+    //                 numPositionsRecorded++;
+    //                 numCurrentPositionSamples = 0;
+    //                 if (numPositionsRecorded < expectedPositions) {
+    //                     ledManager.pattern(50, 50, 2);
+    //                     m_Logger.info("Recorded, waiting for position %i...", numPositionsRecorded + 1);
+    //                     waitForMotion = true;
+    //                 }
+    //             }
+    //         } else {
+    //             numCurrentPositionSamples = 0;
+    //         }
+
+    //         if (numPositionsRecorded >= expectedPositions) break;
+
+    //         delayMicroseconds(BMI160_ODR_ACC_MICROS);
+    //     }
+    //     ledManager.off();
+    //     m_Logger.debug("Calculating accelerometer calibration data...");
+    //     delete[] accelCalibrationChunk;
+    // #endif
+
+    // float A_BAinv[4][3];
+    // magneto->current_calibration(A_BAinv);
+    // delete magneto;
+
+    // m_Logger.debug("Finished calculating accelerometer calibration");
+    // m_Logger.debug("Accelerometer calibration matrix:");
+    // m_Logger.debug("{");
+    // for (int i = 0; i < 3; i++) {
+    //     m_Calibration.A_B[i] = A_BAinv[0][i];
+    //     m_Calibration.A_Ainv[0][i] = A_BAinv[1][i];
+    //     m_Calibration.A_Ainv[1][i] = A_BAinv[2][i];
+    //     m_Calibration.A_Ainv[2][i] = A_BAinv[3][i];
+    //     m_Logger.debug("  %f, %f, %f, %f", A_BAinv[0][i], A_BAinv[1][i], A_BAinv[2][i], A_BAinv[3][i]);
+    // }
+    // m_Logger.debug("}");
 
     m_Logger.debug("Saving the calibration data");
 
