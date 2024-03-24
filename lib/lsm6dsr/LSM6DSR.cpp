@@ -585,6 +585,7 @@ void LSM6DSR::accessDefault(){
 }
 void LSM6DSR::accessSensorhub(){
    setRegister(LSM6DSR_FUNC_CFG_ACCESS,0b01000000);
+   delay(5);
 }
 void LSM6DSR::accessFunctions(){
    setRegister(LSM6DSR_FUNC_CFG_ACCESS,0b10000000);

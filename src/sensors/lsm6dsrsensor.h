@@ -38,15 +38,18 @@
 #define LSM6DSR_GYRO_RATE LSM6DSR_GY_ODR_417Hz
 #define LSM6DSR_GYRO_RANGE LSM6DSR_1000dps
 
-#define LSM6DSR_ACCEL_RATE LSM6DSR_XL_ODR_52Hz
+#define LSM6DSR_ACCEL_RATE LSM6DSR_XL_ODR_104Hz
 #define LSM6DSR_ACCEL_RANGE LSM6DSR_4g
 
 // note: if changing ODR or filter modes - adjust rest detection params and buffer size
+#define LSM6DSR_TIMESTAMP_RESOLUTION_MICROS 25.0f
+
+#define LSM6DSR_MAP_ODR_MICROS(micros) ((uint16_t)((micros) / LSM6DSR_TIMESTAMP_RESOLUTION_MICROS) * LSM6DSR_TIMESTAMP_RESOLUTION_MICROS)
 
 constexpr float LSM6DSR_ODR_GYR_HZ = 416;
-constexpr float LSM6DSR_ODR_ACC_HZ = 52;
-constexpr float LSM6DSR_ODR_GYR_MICROS = 1.0f / LSM6DSR_ODR_GYR_HZ * 1e6f;
-constexpr float LSM6DSR_ODR_ACC_MICROS = 1.0f / LSM6DSR_ODR_ACC_HZ * 1e6f;
+constexpr float LSM6DSR_ODR_ACC_HZ = 104;
+constexpr float LSM6DSR_ODR_GYR_MICROS = LSM6DSR_MAP_ODR_MICROS(1.0f / LSM6DSR_ODR_GYR_HZ * 1e6f);
+constexpr float LSM6DSR_ODR_ACC_MICROS = LSM6DSR_MAP_ODR_MICROS(1.0f / LSM6DSR_ODR_ACC_HZ * 1e6f);
 // note: this value only sets polling and fusion update rate - HMC is internally sampled at 75hz, QMC at 200hz
 #define LSM6DSR_MAG_RATE LSM6DSR_SH_ODR_26Hz
 constexpr float LSM6DSR_ODR_MAG_HZ = 26;
@@ -57,16 +60,18 @@ constexpr float LSM6DSR_ODR_MAG_MICROS = 1.0f / LSM6DSR_ODR_MAG_HZ * 1e6f;
 constexpr double LSM6DSR_GYRO_TYPICAL_SENSITIVITY_MDPS = 33.2f;
 
 constexpr std::pair<uint8_t, float> LSM6DSR_ACCEL_SENSITIVITY_LSB_MAP[] = {
-    {LSM6DSR_2g, 16384.0f},
-    {LSM6DSR_16g, 2048.0f},
-    {LSM6DSR_4g, 8192.0f},
-    {LSM6DSR_8g, 4096.0f}
+    {LSM6DSR_2g, 16393.0f},
+    {LSM6DSR_16g, 2049.0f},
+    {LSM6DSR_4g, 8196.0f},
+    {LSM6DSR_8g, 4098.0f}
 };
 constexpr double LSM6DSR_ACCEL_TYPICAL_SENSITIVITY_LSB = LSM6DSR_ACCEL_SENSITIVITY_LSB_MAP[LSM6DSR_ACCEL_RANGE].second;
 constexpr double LSM6DSR_ASCALE = CONST_EARTH_GRAVITY / LSM6DSR_ACCEL_TYPICAL_SENSITIVITY_LSB;
 
 // Scale conversion steps: LSB/°/s -> °/s -> step/°/s -> step/rad/s
 constexpr double LSM6DSR_GSCALE = ((LSM6DSR_GYRO_TYPICAL_SENSITIVITY_MDPS*1e-3)) * (PI / 180.0);
+
+
 
 constexpr uint32_t LSM6DSR_TEMP_CALIBRATION_REQUIRED_SAMPLES_PER_STEP =
     TEMP_CALIBRATION_SECONDS_PER_STEP / (LSM6DSR_ODR_GYR_MICROS / 1e6);
@@ -136,8 +141,6 @@ class LSM6DSRSensor : public Sensor {
         uint32_t samplesSinceClockSync = 0;
         uint32_t timestamp0 = 0;
         uint32_t timestamp1 = 0;
-
-        int8_t lx = 0, ly = 0, lz = 0;
 
         // scheduling
         uint32_t lastPollTime = micros();

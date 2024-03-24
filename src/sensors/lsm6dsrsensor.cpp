@@ -91,7 +91,7 @@ void LSM6DSRSensor::motionSetup() {
 
     int16_t ax, ay, az;
     getRemappedAcceleration(&ax, &ay, &az);
-    Serial.printf("Acc : %d %d %d\n",ax,ay,az);
+    // Serial.printf("Accel : %d/%d/%d\n",ax,ay,az);
     float g_az = (float)az / LSM6DSR_ACCEL_TYPICAL_SENSITIVITY_LSB;
     if (g_az < -0.75f) {
         m_Logger.info("Flip front to confirm start calibration");
@@ -202,7 +202,7 @@ void LSM6DSRSensor::motionLoop() {
 
     {
         uint32_t now = micros();
-        constexpr float maxSendRateHz = 0.5f;
+        constexpr float maxSendRateHz = 2.0f;
         constexpr uint32_t sendInterval = 1.0f/maxSendRateHz * 1e6;
         uint32_t elapsed = now - lastTemperaturePacketSent;
         if (elapsed >= sendInterval) {
@@ -219,7 +219,7 @@ void LSM6DSRSensor::motionLoop() {
 
     {
         uint32_t now = micros();
-        constexpr float maxSendRateHz = 60.0f;
+        constexpr float maxSendRateHz = 120.0f;
         constexpr uint32_t sendInterval = 1.0f/maxSendRateHz * 1e6;
         uint32_t elapsed = now - lastRotationPacketSent;
         if (elapsed >= sendInterval) {
@@ -239,7 +239,7 @@ void LSM6DSRSensor::motionLoop() {
             fusedRotation *= sensorOffset;
             if (!OPTIMIZE_UPDATES || !lastFusedRotationSent.equalsWithEpsilon(fusedRotation))
             {
-                newFusedRotation = true;
+                setFusedRotationReady();
                 lastFusedRotationSent = fusedRotation;
             }
 
@@ -342,13 +342,6 @@ void LSM6DSRSensor::readFIFO() {
         }
     }
     if(samples){
-        // gx = (sgx+lx)/samples;
-        // lx = (sgx+lx)%samples;
-        // gy = (sgy+ly)/samples;
-        // ly = (sgy+ly)%samples;
-        // gz = (sgz+lz)/samples;
-        // lz = (sgz+lz)%samples;
-        // onGyroRawSample(sampleDtMicros*samples, gx, gy, gz);
         onGyroRawSample((timestamp1-timestamp0)*25,(float)sgx/samples,(float)sgy/samples,(float)sgz/samples);
         timestamp0 = timestamp1;
     }
@@ -357,11 +350,6 @@ void LSM6DSRSensor::readFIFO() {
 void LSM6DSRSensor::onGyroRawSample(uint32_t dtMicros, float x, float y, float z) {
     #if BMI160_DEBUG
         gyrReads++;
-    #endif
-
-    #if BMI160_USE_TEMPCAL
-        bool restDetected = sfusion.getRestDetected();
-        gyroTempCalibrator->updateGyroTemperatureCalibration(temperature, restDetected, x, y, z);
     #endif
 
     sensor_real_t gyroCalibratedStatic[3];
@@ -386,6 +374,11 @@ void LSM6DSRSensor::onGyroRawSample(uint32_t dtMicros, float x, float y, float z
     remapGyroAccel(&Gxyz[0], &Gxyz[1], &Gxyz[2]);
 
     sfusion.updateGyro(Gxyz, (double)dtMicros * 1.0e-6);
+
+    #if BMI160_USE_TEMPCAL
+        bool restDetected = sfusion.getRestDetected();
+        gyroTempCalibrator->updateGyroTemperatureCalibration(temperature, restDetected, x, y, z);
+    #endif
 
     optimistic_yield(100);
 }
@@ -694,7 +687,7 @@ void LSM6DSRSensor::maybeCalibrateAccel() {
         m_Logger.debug("Calculating accelerometer calibration data...");
     #elif BMI160_ACCEL_CALIBRATION_METHOD == ACCEL_CALIBRATION_METHOD_6POINT
         RestDetectionParams calibrationRestDetectionParams;
-        calibrationRestDetectionParams.restMinTimeMicros = 0.5 * 1e6;
+        calibrationRestDetectionParams.restMinTime = 0.5;
         calibrationRestDetectionParams.restThAcc = 0.25f;
         RestDetection calibrationRestDetection(
             calibrationRestDetectionParams,

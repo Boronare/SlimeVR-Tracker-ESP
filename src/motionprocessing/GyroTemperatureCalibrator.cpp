@@ -34,7 +34,7 @@ void GyroTemperatureCalibrator::resetCurrentTemperatureState() {
 }
 
 // must be called for every raw gyro sample
-void GyroTemperatureCalibrator::updateGyroTemperatureCalibration(const float temperature, const bool restDetected, int16_t x, int16_t y, int16_t z) {
+void GyroTemperatureCalibrator::updateGyroTemperatureCalibration(const float temperature, const bool restDetected, float x, float y, float z) {
     if (!restDetected) {
         return resetCurrentTemperatureState();
     }
@@ -91,8 +91,8 @@ void GyroTemperatureCalibrator::updateGyroTemperatureCalibration(const float tem
     
     if (idx < 0 || idx >= TEMP_CALIBRATION_BUFFER_SIZE) return;
 
-    bool currentTempAlreadyCalibrated = config.samples[idx].t != 0.0f;
-    if (currentTempAlreadyCalibrated) return;
+    // bool currentTempAlreadyCalibrated = config.samples[idx].t != 0.0f;
+    // if (currentTempAlreadyCalibrated) return;
 
     if (state.temperatureCurrentIdx != idx) {
         state.temperatureCurrentIdx = idx;
@@ -130,6 +130,8 @@ void GyroTemperatureCalibrator::updateGyroTemperatureCalibration(const float tem
             TEMP_CALIBRATION_TEMP_TO_IDX(config.minTemperatureRange);
         config.maxCalibratedIdx =
             TEMP_CALIBRATION_TEMP_TO_IDX(config.maxTemperatureRange);
+            ledManager.on();
+            ledManager.pattern(120,30,4);
         resetCurrentTemperatureState();
     }
 }
@@ -161,8 +163,7 @@ bool GyroTemperatureCalibrator::approximateOffset(const float temperature, float
         config.maxTemperatureRange
     );
 
-    const int16_t idx =
-        TEMP_CALIBRATION_TEMP_TO_IDX(constrainedTemperature);
+    const int16_t idx = TEMP_CALIBRATION_TEMP_TO_IDX(constrainedTemperature);
 
     if (idx < 0 || idx >= TEMP_CALIBRATION_BUFFER_SIZE) return false;
 
