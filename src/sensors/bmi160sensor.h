@@ -87,7 +87,7 @@ constexpr uint16_t BMI160_FIFO_READ_BUFFER_SIZE_BYTES = min(
 // #define BMI160_GYRO_TYPICAL_SENSITIVITY_LSB 65.6f  // 500 deg   2
 // #define BMI160_GYRO_TYPICAL_SENSITIVITY_LSB 131.2f // 250 deg   3 
 // #define BMI160_GYRO_TYPICAL_SENSITIVITY_LSB 262.4f // 125 deg   4
-constexpr double BMI160_GYRO_TYPICAL_SENSITIVITY_LSB = (16.4f * (1 << BMI160_GYRO_RANGE));
+constexpr double BMI160_GYRO_TYPICAL_SENSITIVITY_LSB = (16.2f * (1 << BMI160_GYRO_RANGE));
 
 constexpr std::pair<uint8_t, float> BMI160_ACCEL_SENSITIVITY_LSB_MAP[] = {
     {BMI160_ACCEL_RANGE_2G, 16384.0f},
@@ -200,12 +200,10 @@ class BMI160Sensor : public Sensor {
         sensor_real_t Gxyz[3] = {0};
         sensor_real_t Axyz[3] = {0};
         sensor_real_t Mxyz[3] = {0};
-        float Gavg[3]{};
-        float Gdev[3]{};
         
         int8_t lx = 0, ly = 0, lz = 0;
 
-        double gscaleX = BMI160_GSCALE;
+        double gscaleX = BMI160_GSCALE*0.982;
         double gscaleY = BMI160_GSCALE;
         double gscaleZ = BMI160_GSCALE;
 

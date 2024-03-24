@@ -540,34 +540,18 @@ void BMI160Sensor::readFIFO() {
         // ly = (sgy+ly)%samples;
         sgz = (sgz)/samples;
         // lz = (sgz+lz)%samples;
-        float dev[3];
-        for(uint8_t k=0;k<3;k++){
-            float gval = k==0?sgx:k==1?sgy:sgz;
-            Gavg[k]=0.95*Gavg[k]+0.05*gval;
-            dev[k]=sq(m_Calibration.G_off[k]-gval);
-            Gdev[k]=0.95*Gdev[k]+0.05*sq(Gavg[k]-gval);
-        }
-        Serial.printf("Gdev: %+f %+f %+f / %+f %+f %+f\n",Gdev[0],Gdev[1],Gdev[2],dev[0],dev[1],dev[2]);
-        // if(Gdev[0]<0.00020/sq(BMI160_GSCALE)&&Gdev[1]<0.00020/sq(BMI160_GSCALE)&&Gdev[2]<0.00020/sq(BMI160_GSCALE)
-        //         &&(dev[0]<0.00003/sq(BMI160_GSCALE)&&dev[1]<0.00003/sq(BMI160_GSCALE)&&dev[2]<0.00003/sq(BMI160_GSCALE))){
-        //     m_Calibration.G_off[0]=m_Calibration.G_off[0]*0.95+sgx*0.05;
-        //     m_Calibration.G_off[1]=m_Calibration.G_off[1]*0.95+sgy*0.05;
-        //     m_Calibration.G_off[2]=m_Calibration.G_off[2]*0.95+sgz*0.05;
-        //     ledManager.on();
-        // }
-        // else ledManager.off();
         onGyroRawSample(BMI160_ODR_GYR_MICROS*samples, sgx, sgy, sgz);
+        // if(sfusion.getRestDetected()){
+        //     m_Calibration.G_off[0]=m_Calibration.G_off[0]*0.97+sgx*0.03;
+        //     m_Calibration.G_off[1]=m_Calibration.G_off[1]*0.97+sgy*0.03;
+        //     m_Calibration.G_off[2]=m_Calibration.G_off[2]*0.97+sgz*0.03;
+        // }
     }
 }
 
 void BMI160Sensor::onGyroRawSample(uint32_t dtMicros, float x, float y, float z) {
     #if BMI160_DEBUG
         gyrReads++;
-    #endif
-
-    #if BMI160_USE_TEMPCAL
-        bool restDetected = sfusion.getRestDetected();
-        gyroTempCalibrator->updateGyroTemperatureCalibration(temperature, restDetected, x, y, z);
     #endif
 
     sensor_real_t gyroCalibratedStatic[3];
@@ -592,6 +576,11 @@ void BMI160Sensor::onGyroRawSample(uint32_t dtMicros, float x, float y, float z)
     remapGyroAccel(&Gxyz[0], &Gxyz[1], &Gxyz[2]);
 
 	sfusion.updateGyro(Gxyz, (sensor_real_t)dtMicros * 1.0e-6);
+
+    #if BMI160_USE_TEMPCAL
+        bool restDetected = sfusion.getRestDetected();
+        gyroTempCalibrator->updateGyroTemperatureCalibration(temperature, restDetected, x, y, z);
+    #endif
 
 	optimistic_yield(100);
 }
