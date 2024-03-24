@@ -23,15 +23,36 @@
 
 #include "SensorManager.h"
 #include <i2cscan.h>
+#if IMU == IMU_BNO055
 #include "bno055sensor.h"
+#endif
+#if IMU == IMU_BNO080 || IMU == IMU_BNO085 || IMU == IMU_BNO086
 #include "bno080sensor.h"
+#endif
+#if IMU == IMU_MPU9250
 #include "mpu9250sensor.h"
+#endif
+#if IMU == IMU_MPU6050
 #include "mpu6050sensor.h"
+#endif
+#if IMU == IMU_BMI160
 #include "bmi160sensor.h"
+#endif
+#if IMU == IMU_ICM20948
 #include "icm20948sensor.h"
+#endif
+#if IMU == IMU_QMI8658
 #include "qmi8658sensor.h"
+#endif
+#if IMU == IMU_ICM42688
 #include "icm42688sensor.h"
+#endif
+#if IMU == IMU_LSM6DSR
 #include "lsm6dsrsensor.h"
+#endif
+#if IMU == IMU_BMI270
+#include "bmi270sensor.h"
+#endif
 #include "ErroneousSensor.h"
 #include "sensoraddresses.h"
 #include "GlobalVars.h"
@@ -75,6 +96,7 @@ namespace SlimeVR
             }
 
             switch (imuType) {
+#if IMU == IMU_BNO080 || IMU == IMU_BNO085 || IMU == IMU_BNO086
             case IMU_BNO080: case IMU_BNO085: case IMU_BNO086:
                 // Extra param used as interrupt pin
                 {
@@ -82,12 +104,18 @@ namespace SlimeVR
                 sensor = new BNO080Sensor(sensorID, imuType, address, rotation, sclPin, sdaPin, intPin);
                 }
                 break;
+#endif
+#if IMU == IMU_BNO055
             case IMU_BNO055:
                 sensor = new BNO055Sensor(sensorID, address, rotation, sclPin, sdaPin);
                 break;
+#endif
+#if IMU == IMU_MPU9250
             case IMU_MPU9250:
                 sensor = new MPU9250Sensor(sensorID, address, rotation, sclPin, sdaPin);
                 break;
+#endif
+#if IMU == IMU_BMI160
             case IMU_BMI160:
                 // Extra param used as axis remap descriptor
                 {
@@ -101,21 +129,37 @@ namespace SlimeVR
                 }
                 }
                 break;
+#endif
+#if IMU == IMU_MPU6500
             case IMU_MPU6500: case IMU_MPU6050:
                 sensor = new MPU6050Sensor(sensorID, imuType, address, rotation, sclPin, sdaPin);
                 break;
+#endif
+#if IMU == IMU_ICM20948
             case IMU_ICM20948:
                 sensor = new ICM20948Sensor(sensorID, address, rotation, sclPin, sdaPin);
                 break;
+#endif
+#if IMU == IMU_QMI8658
             case IMU_QMI8658:
                 sensor = new QMI8658Sensor(sensorID, address, rotation, sclPin, sdaPin);
                 break;
+#endif
+#if IMU == IMU_ICM42688
             case IMU_ICM42688:
                 sensor = new ICM42688Sensor(sensorID, address, rotation, sclPin, sdaPin);
                 break;
+#endif
+#if IMU == IMU_LSM6DSR
             case IMU_LSM6DSR:
                 sensor = new LSM6DSRSensor(sensorID, address, rotation, sclPin, sdaPin);
                 break;
+#endif
+#if IMU == IMU_BMI270
+            case IMU_BMI270:
+                sensor = new BMI270Sensor(sensorID, address, rotation, sclPin, sdaPin);
+                break;
+#endif
             default:
                 sensor = new ErroneousSensor(sensorID, imuType);
                 break;

@@ -27,7 +27,12 @@
 #include "consts.h"
 #include "debug.h"
 #include "defines.h"
+#if IMU == IMU_BMI160
 #include "defines_bmi160.h"
+#endif
+#if IMU == IMU_BMI270
+#include "defines_bmi270.h"
+#endif
 #include "defines_sensitivity.h"
 
 #ifndef SECOND_IMU
