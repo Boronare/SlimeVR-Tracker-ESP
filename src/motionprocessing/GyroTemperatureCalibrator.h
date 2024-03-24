@@ -181,7 +181,7 @@ public:
         m_Logger.setTag(buf);
     }
 
-    void updateGyroTemperatureCalibration(const float temperature, const bool restDetected, int16_t x, int16_t y, int16_t z);
+    void updateGyroTemperatureCalibration(const float temperature, const bool restDetected, float x, float y, float z);
     bool approximateOffset(const float temperature, float GOxyz[3]);
     bool loadConfig(float newSensitivity);
     bool saveConfig();
@@ -207,10 +207,10 @@ private:
     bool calibrationRunning = false;
     OnlineVectorPolyfit<3, 3, (uint64_t)1e9> poly;
     float bst = 0.0f;
-    int32_t bsx = 0;
-    int32_t bsy = 0;
-    int32_t bsz = 0;
-    int32_t bn = 0;
+    float bsx = 0;
+    float bsy = 0;
+    float bsz = 0;
+    float bn = 0;
     float lastTemp = 0;
 
     void resetCurrentTemperatureState();

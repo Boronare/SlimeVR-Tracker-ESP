@@ -43,9 +43,6 @@ namespace SlimeVR
         #if SENSOR_USE_VQF
         struct SensorVQFParams: VQFParams {
             SensorVQFParams() : VQFParams() {
-                #ifndef VQF_NO_MOTION_BIAS_ESTIMATION
-                motionBiasEstEnabled = false;
-                #endif
                 tauAcc = 2.0f;
                 tauMag = 2.0f;
                 restMinT = 2.0f;
