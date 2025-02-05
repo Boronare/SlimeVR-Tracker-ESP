@@ -27,6 +27,7 @@
 #include "sensor.h"
 #include "sensors/axisremap.h"
 #include "magneto1.4.h"
+#include "defines_bmi160.h"
 
 #include <LSM6DSR.h>
 #include "SensorFusionRestDetect.h"
@@ -57,7 +58,7 @@ constexpr float LSM6DSR_ODR_MAG_MICROS = 1.0f / LSM6DSR_ODR_MAG_HZ * 1e6f;
 
 
 // Typical sensitivity
-constexpr double LSM6DSR_GYRO_TYPICAL_SENSITIVITY_MDPS = 33.2f;
+constexpr double LSM6DSR_GYRO_TYPICAL_SENSITIVITY_MDPS = 35.f;
 
 constexpr std::pair<uint8_t, float> LSM6DSR_ACCEL_SENSITIVITY_LSB_MAP[] = {
     {LSM6DSR_2g, 16393.0f},
@@ -141,6 +142,11 @@ class LSM6DSRSensor : public Sensor {
         uint32_t samplesSinceClockSync = 0;
         uint32_t timestamp0 = 0;
         uint32_t timestamp1 = 0;
+        uint32_t actualSensorMicros = 0;
+        bool magCalibrating = false;
+        int16_t *Cx,*Cy,*Cz;
+        int8_t *ignoreList;
+        uint8_t Cf = 0, Cr = 0;
 
         // scheduling
         uint32_t lastPollTime = micros();

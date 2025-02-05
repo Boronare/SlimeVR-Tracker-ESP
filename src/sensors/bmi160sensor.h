@@ -27,6 +27,7 @@
 #include "sensor.h"
 #include "sensors/axisremap.h"
 #include "magneto1.4.h"
+#include "defines_bmi160.h"
 
 #include <BMI160.h>
 #include "SensorFusionRestDetect.h"

@@ -2516,10 +2516,14 @@ class LSM6DSR
 
     void setTimestampEnabled(bool enabled);
     bool getTimestampEnabled();
+
+    float getFinedGyroODR();
+    int8_t getFreqFine();
     
     private:
         uint8_t buffer[14];
         uint8_t devAddr;
+        uint8_t accessing = 0;
 };
 
 #endif

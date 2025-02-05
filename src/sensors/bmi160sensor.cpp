@@ -488,8 +488,8 @@ void BMI160Sensor::readFIFO() {
         imu.getMagnetometer(&mx,&my,&mz);
         onMagRawSample(samplingRateInMillis*1000, mx, my, mz);
     #endif
-    imu.getAcceleration(&ax,&ay,&az);
-    onAccelRawSample(samplingRateInMillis*1000, ax, ay, az);
+    // imu.getAcceleration(&ax,&ay,&az);
+    // onAccelRawSample(samplingRateInMillis*1000, ax, ay, az);
 
     uint8_t header;
     for (uint32_t i = 0; i < fifo.length;) {
@@ -741,9 +741,13 @@ bool BMI160Sensor::hasMagCalibration() {
 }
 
 void BMI160Sensor::startCalibration(int calibrationType) {
+    SlimeVR::Configuration::CalibrationConfig calibration;
+    calibration.type = SlimeVR::Configuration::CalibrationConfigType::BMI160;
     ledManager.on();
     #if(USE_6_AXIS)
-    maybeCalibrateGyro();
+    maybeCalibrateGyro();    calibration.data.bmi160 = m_Calibration;
+    configuration.setCalibration(sensorId, calibration);
+    configuration.save();
     maybeCalibrateAccel();
     #else
     if(!hasGyroCalibration()){
@@ -754,17 +758,20 @@ void BMI160Sensor::startCalibration(int calibrationType) {
     #endif
     m_Logger.debug("Saving the calibration data");
 
-    SlimeVR::Configuration::CalibrationConfig calibration;
-    calibration.type = SlimeVR::Configuration::CalibrationConfigType::BMI160;
     calibration.data.bmi160 = m_Calibration;
     configuration.setCalibration(sensorId, calibration);
     configuration.save();
+    
     if(!hasMagCalibration()){
         initMMC();
         delay(10);
-        imu.waitForMagDrdy();
+        int16_t mx,my,mz;
+        imu.getMagnetometer(&mx,&my,&mz);
+        int16_t px=mx,py=my,pz=mz;
+        while(mx==px && my==py && mz==pz){
+            imu.getMagnetometer(&mx,&my,&mz);
+        }
     };
-
     m_Logger.debug("Saved the calibration data");
 
     m_Logger.info("Calibration data gathered, exiting calibration mode in...");
@@ -881,8 +888,8 @@ void BMI160Sensor::maybeCalibrateAccel() {
         m_Logger.debug("Calculating accelerometer calibration data...");
     #elif BMI160_ACCEL_CALIBRATION_METHOD == ACCEL_CALIBRATION_METHOD_6POINT
         RestDetectionParams calibrationRestDetectionParams;
-        calibrationRestDetectionParams.restMinTime = 0.5;
-        calibrationRestDetectionParams.restThAcc = 0.25f;
+        calibrationRestDetectionParams.restMinTimeMicros = 500000;
+        calibrationRestDetectionParams.restThAcc = 10.25f;
         RestDetection calibrationRestDetection(
             calibrationRestDetectionParams,
             BMI160_ODR_GYR_MICROS * 1.0e-6,
@@ -901,9 +908,13 @@ void BMI160Sensor::maybeCalibrateAccel() {
         ledManager.on();
         m_Logger.info("Gathering accelerometer data...");
         m_Logger.info("Waiting for position %i, you can leave the device as is...", numPositionsRecorded + 1);
+        int16_t Ax=0,Ay=0,Az=0;
         while (true) {
             int16_t ax, ay, az;
             imu.getAcceleration(&ax, &ay, &az);
+            if(abs(Ax-ax)>100||abs(Ay-ay)>100||abs(Az-az)>100)
+                ledManager.pattern(20,20,1);
+            Ax=ax;Ay=ay;Az=az;
             sensor_real_t scaled[3];
             scaled[0] = ax * BMI160_ASCALE;
             scaled[1] = ay * BMI160_ASCALE;
@@ -1112,7 +1123,7 @@ void BMI160Sensor::remapGyroAccel(sensor_real_t* x, sensor_real_t* y, sensor_rea
 }
 
 void BMI160Sensor::remapMagnetometer(sensor_real_t* x, sensor_real_t* y, sensor_real_t* z) {
-    remapAllAxis(AXIS_REMAP_GET_ALL_MAG(axisRemap), x, y, z);
+    // remapAllAxis(AXIS_REMAP_GET_ALL_MAG(axisRemap), x, y, z);
 }
 
 void BMI160Sensor::getRemappedRotation(int16_t* x, int16_t* y, int16_t* z) {

@@ -25,27 +25,28 @@
 #include "GlobalVars.h"
 #include <map>
 
+constexpr uint8_t CaliSamples=240;
+constexpr int MagTolerance=40;
+
 void LSM6DSRSensor::initMMC(){    /* Configure MAG interface and setup mode */
 
     imu.setMagDevice(0x30,0x00);
-    delay(3);
+    delay(50);
     
     /* Configure MMC5603NJ Sensor */
 
     //Reboot Magnetometer
     imu.setMagRegister(0x1C, 0x80);
-    delay(30);
+    delay(100);
     //Set BW=00(6.6ms measurment time)
     imu.setMagRegister(0x1C, 0x00);
-    delay(3);
     //Set ODR
     imu.setMagRegister(0x1A, 26);
-    delay(3);
     //Enable Continuous mode & Auto SR
     imu.setMagRegister(0x1B, 0xA0);
-    delay(3);
     //Start Continuous mode
     imu.setMagRegister(0x1D, 0x10);
+    delay(50);
 }
 
 void LSM6DSRSensor::motionSetup() {
@@ -57,18 +58,16 @@ void LSM6DSRSensor::motionSetup() {
         LSM6DSR_ACCEL_RATE,
         LSM6DSR_ACCEL_RANGE
     );
-    #if !USE_6_AXIS
-            initMMC();
-    #endif
 
     if (!imu.testConnection()) {
         m_Logger.fatal("Can't connect to LSM6DSR (reported device ID 0x%02x) at address 0x%02x", imu.getDeviceID(), addr);
-        ledManager.pattern(50, 50, 200);
+        ledManager.pattern(50, 50, 50);
         return;
     }
 
     m_Logger.info("Connected to LSM6DSR (reported device ID 0x%02x) at address 0x%02x", imu.getDeviceID(), addr);
-
+    
+    actualSensorMicros = 1000000/imu.getFinedGyroODR();
     // Initialize the configuration
     {
         SlimeVR::Configuration::CalibrationConfig sensorCalibration = configuration.getCalibration(sensorId);
@@ -91,7 +90,6 @@ void LSM6DSRSensor::motionSetup() {
 
     int16_t ax, ay, az;
     getRemappedAcceleration(&ax, &ay, &az);
-    // Serial.printf("Accel : %d/%d/%d\n",ax,ay,az);
     float g_az = (float)az / LSM6DSR_ACCEL_TYPICAL_SENSITIVITY_LSB;
     if (g_az < -0.75f) {
         m_Logger.info("Flip front to confirm start calibration");
@@ -108,7 +106,17 @@ void LSM6DSRSensor::motionSetup() {
 
         ledManager.off();
     }
-
+    else{
+        if(!hasGyroCalibration()){
+            ledManager.pattern(150,150,5);
+            startCalibration(0);
+            ledManager.off();
+        }
+        #if !USE_6_AXIS
+            if(!hasMagCalibration()) startCalibration(0);
+            else initMMC();
+        #endif
+    }
     {
         #define IS_INT16_CLIPPED(value) (value == INT16_MIN || value == INT16_MAX)
         const bool anyClipped = IS_INT16_CLIPPED(ax) || IS_INT16_CLIPPED(ay) || IS_INT16_CLIPPED(az);
@@ -124,7 +132,7 @@ void LSM6DSRSensor::motionSetup() {
 
     // allocate temperature memory after calibration because OOM
     gyroTempCalibrator = new GyroTemperatureCalibrator(
-        SlimeVR::Configuration::CalibrationConfigType::BMI160,
+        SlimeVR::Configuration::CalibrationConfigType::LSM6DSR,
         sensorId,
         1000/LSM6DSR_GYRO_TYPICAL_SENSITIVITY_MDPS,
         LSM6DSR_TEMP_CALIBRATION_REQUIRED_SAMPLES_PER_STEP
@@ -141,25 +149,7 @@ void LSM6DSRSensor::motionSetup() {
         }
     #endif
 
-    #if BMI160_USE_SENSCAL
-    {
-        String localDevice = WiFi.macAddress();
-        for (auto const& offsets : sensitivityOffsets) {
-            if (!localDevice.equals(offsets.mac)) continue;
-            if (offsets.sensorId != sensorId) continue;
 
-            #define LSM6DSR_CALCULATE_SENSITIVTY_MUL(degrees) (1.0 / (1.0 - ((degrees)/(360.0 * offsets.spins))))
-
-            gscaleX = LSM6DSR_GSCALE * LSM6DSR_CALCULATE_SENSITIVTY_MUL(offsets.x);
-            gscaleY = LSM6DSR_GSCALE * LSM6DSR_CALCULATE_SENSITIVTY_MUL(offsets.y);
-            gscaleZ = LSM6DSR_GSCALE * LSM6DSR_CALCULATE_SENSITIVTY_MUL(offsets.z);
-            m_Logger.debug("Custom sensitivity offset enabled: %s %s",
-                offsets.mac,
-                offsets.sensorId == SENSORID_PRIMARY ? "primary" : "aux"
-            );
-        }
-    }
-    #endif
 
     isGyroCalibrated = hasGyroCalibration();
     isAccelCalibrated = hasAccelCalibration();
@@ -284,13 +274,6 @@ void LSM6DSRSensor::readFIFO() {
     int16_t mx, my, mz;
     uint8_t samples = 0;
 
-    // #if !USE_6_AXIS
-    //     imu.getMagnetometer(&mx,&my,&mz);
-    //     onMagRawSample(samplingRateInMillis*1000, mx, my, mz);
-    // #endif
-    // imu.getAcceleration(&ax,&ay,&az);
-    // onAccelRawSample(samplingRateInMillis*1000, ax, ay, az);
-
     for (uint32_t i = 0; i < fifo.length;i++) {
         if (!imu.getFIFOBytes(fifo.data)) {
             #if BMI160_DEBUG
@@ -342,7 +325,8 @@ void LSM6DSRSensor::readFIFO() {
         }
     }
     if(samples){
-        onGyroRawSample((timestamp1-timestamp0)*25,(float)sgx/samples,(float)sgy/samples,(float)sgz/samples);
+        // onGyroRawSample((timestamp1-timestamp0)*25,(float)sgx/samples,(float)sgy/samples,(float)sgz/samples);
+        onGyroRawSample(actualSensorMicros*samples,(float)sgx/samples,(float)sgy/samples,(float)sgz/samples);
         timestamp0 = timestamp1;
     }
 }
@@ -353,9 +337,9 @@ void LSM6DSRSensor::onGyroRawSample(uint32_t dtMicros, float x, float y, float z
     #endif
 
     sensor_real_t gyroCalibratedStatic[3];
-    gyroCalibratedStatic[0] = (sensor_real_t)((((double)x - m_Calibration.G_off[0]) * gscaleX));
-    gyroCalibratedStatic[1] = (sensor_real_t)((((double)y - m_Calibration.G_off[1]) * gscaleY));
-    gyroCalibratedStatic[2] = (sensor_real_t)((((double)z - m_Calibration.G_off[2]) * gscaleZ));
+    gyroCalibratedStatic[0] = (sensor_real_t)((x - m_Calibration.G_off[0]) * gscaleX);
+    gyroCalibratedStatic[1] = (sensor_real_t)((y - m_Calibration.G_off[1]) * gscaleY);
+    gyroCalibratedStatic[2] = (sensor_real_t)((z - m_Calibration.G_off[2]) * gscaleZ);
 
     #if BMI160_USE_TEMPCAL
     float GOxyz[3];
@@ -401,12 +385,131 @@ void LSM6DSRSensor::onMagRawSample(uint32_t dtMicros, int16_t x, int16_t y, int1
     #endif
 
     #if !USE_6_AXIS
-    Mxyz[0] = (sensor_real_t)x;
-    Mxyz[1] = (sensor_real_t)y;
-    Mxyz[2] = (sensor_real_t)z;
-    applyMagCalibrationAndScale(Mxyz);
-    remapMagnetometer(&Mxyz[0], &Mxyz[1], &Mxyz[2]);
-    sfusion.updateMag(Mxyz);
+
+    if(magCalibrating){
+        Serial.print('.');
+        ledManager.on();
+        if (abs(Cx[Cf] - x) > MagTolerance || abs(Cy[Cf] - y) > MagTolerance || abs(Cz[Cf] - z) > MagTolerance)
+        {
+            ledManager.off();
+            if(Cf==0 && Cr == CaliSamples-1) Serial.println("Starting Magneto Calibration");
+            Cf++;
+            if (Cf >= CaliSamples)
+                Cf = 0;
+            Cx[Cf] = x;
+            Cy[Cf] = y;
+            Cz[Cf] = z;
+            Serial.printf("Mag Sample:%d %d %d\n",x,y,z);
+            if (Cf == Cr)
+            {
+                MagnetoCalibration magneto;
+                float cali[4][3];
+                for (uint8_t i = 0; i < CaliSamples; i++)
+                {
+                    if(!ignoreList[i])
+                        magneto.sample(Cx[i],Cy[i],Cz[i]);
+                }
+                magneto.current_calibration(cali);
+
+                //VerifyMagCali
+                    uint8_t invalidCnt = 0;
+                    float avgstr = 0.0f;
+                    for (uint8_t i = 0; i < CaliSamples; i++)
+                    {
+                        float tx, ty, tz;
+                        float x, y, z;
+                        tx = Cx[i] - cali[0][0];
+                        ty = Cy[i] - cali[0][1];
+                        tz = Cz[i] - cali[0][2];
+                #if useFullCalibrationMatrix == true
+                        x = cali.M_Ainv[0][0] * tx + cali.M_Ainv[0][1] * ty + cali.M_Ainv[0][2] * tz;
+                        y = cali.M_Ainv[1][0] * tx + cali.M_Ainv[1][1] * ty + cali.M_Ainv[1][2] * tz;
+                        z = cali.M_Ainv[2][0] * tx + cali.M_Ainv[2][1] * ty + cali.M_Ainv[2][2] * tz;
+                #else
+                        x = tx;
+                        y = ty;
+                        z = tz;
+                #endif
+                        avgstr += sqrt(sq(x) + sq(y) + sq(z)) / CaliSamples;
+                    }
+                    if(isnan(avgstr)) return;
+
+                    m_Logger.debug("Average Mag strength with given calibration : %.1f\n", avgstr);
+                    for (uint8_t i = 0; i < CaliSamples; i++)
+                    {
+                        float tx, ty, tz;
+                        float x, y, z;
+                        tx = Cx[i] - cali[0][0];
+                        ty = Cy[i] - cali[0][1];
+                        tz = Cz[i] - cali[0][2];
+                #if useFullCalibrationMatrix == true
+                        x = cali.M_Ainv[0][0] * tx + cali.M_Ainv[0][1] * ty + cali.M_Ainv[0][2] * tz;
+                        y = cali.M_Ainv[1][0] * tx + cali.M_Ainv[1][1] * ty + cali.M_Ainv[1][2] * tz;
+                        z = cali.M_Ainv[2][0] * tx + cali.M_Ainv[2][1] * ty + cali.M_Ainv[2][2] * tz;
+                #else
+                        x = tx;
+                        y = ty;
+                        z = tz;
+                #endif
+                        // Serial.printf(" %.1f \n", magstr[i]);
+                        if (!(abs(avgstr - sqrt(sq(x) + sq(y) + sq(z))) < 20)){
+                            invalidCnt++;
+                            ignoreList[i]=1;
+                        }
+                        else ignoreList[i]=0;
+                    }
+                    if (invalidCnt < CaliSamples / 6)
+                    {
+                        Serial.print("New calibration valid\n");
+                        MagnetoCalibration sec;
+                        for (uint8_t i = 0; i < CaliSamples; i++)
+                        {
+                            if(!ignoreList[i])
+                                sec.sample(Cx[i],Cy[i],Cz[i]);
+                        }
+                        sec.current_calibration(cali);
+                        
+                        magCalibrating=false;
+                        delete Cx;
+                        delete Cy;
+                        delete Cz;
+                        delete ignoreList;
+
+                        m_Logger.debug("[INFO] Magnetometer calibration matrix:");
+                        m_Logger.debug("{");
+                        for (int i = 0; i < 3; i++) {
+                            m_Calibration.M_B[i] = cali[0][i];
+                            m_Calibration.M_Ainv[0][i] = cali[1][i];
+                            m_Calibration.M_Ainv[1][i] = cali[2][i];
+                            m_Calibration.M_Ainv[2][i] = cali[3][i];
+                            m_Logger.debug("  %f, %f, %f, %f", cali[0][i], cali[1][i], cali[2][i], cali[3][i]);
+                        }
+                        m_Logger.debug("}");
+                        
+                        SlimeVR::Configuration::CalibrationConfig calibration;
+                        calibration.type = SlimeVR::Configuration::CalibrationConfigType::BMI160;
+                        calibration.data.bmi160 = m_Calibration;
+                        configuration.setCalibration(sensorId, calibration);
+                        configuration.save();
+                    }
+                    else{
+                        for(uint8_t i=0; i< CaliSamples; i++)
+                            ignoreList[i]=0;
+                    }
+                Cr += CaliSamples / 4;
+                if (Cr >= CaliSamples)
+                    Cr -= CaliSamples;
+            }
+        }
+    }
+    else{
+        Mxyz[0] = (sensor_real_t)x;
+        Mxyz[1] = (sensor_real_t)y;
+        Mxyz[2] = (sensor_real_t)z;
+        applyMagCalibrationAndScale(Mxyz);
+        remapMagnetometer(&Mxyz[0], &Mxyz[1], &Mxyz[2]);
+        sfusion.updateMag(Mxyz);
+    }
     #endif
 }
 
@@ -542,6 +645,18 @@ void LSM6DSRSensor::startCalibration(int calibrationType) {
     calibration.type = SlimeVR::Configuration::CalibrationConfigType::BMI160;
     ledManager.on();
     #if(USE_6_AXIS)
+    if(!hasMagCalibration()){
+        initMMC();
+        delay(10);
+        int16_t mx=0,my=0,mz=0;
+        imu.getMagnetometer(&mx,&my,&mz);
+        int16_t px=mx,py=my,pz=mz;
+        while(mx==px && my==py && mz==pz){
+            delay(50);
+            Serial.printf("M:%d %d %d\n",mx,my,mz);
+            imu.getMagnetometer(&mx,&my,&mz);
+        }
+    };
     maybeCalibrateGyro();
     calibration.data.bmi160 = m_Calibration;
     configuration.setCalibration(sensorId, calibration);
@@ -552,6 +667,8 @@ void LSM6DSRSensor::startCalibration(int calibrationType) {
         maybeCalibrateGyro();
         maybeCalibrateAccel();
     }
+    initMMC();
+    delay(50);
     maybeCalibrateMag();
     #endif
     m_Logger.debug("Saving the calibration data");
@@ -559,17 +676,6 @@ void LSM6DSRSensor::startCalibration(int calibrationType) {
     calibration.data.bmi160 = m_Calibration;
     configuration.setCalibration(sensorId, calibration);
     configuration.save();
-    
-    if(!hasMagCalibration()){
-        initMMC();
-        delay(10);
-        int16_t mx,my,mz;
-        imu.getMagnetometer(&mx,&my,&mz);
-        int16_t px=mx,py=my,pz=mz;
-        while(mx==px && my==py && mz==pz){
-            imu.getMagnetometer(&mx,&my,&mz);
-        }
-    };
 
     m_Logger.debug("Saved the calibration data");
 
@@ -583,24 +689,8 @@ void LSM6DSRSensor::startCalibration(int calibrationType) {
 }
 
 void LSM6DSRSensor::maybeCalibrateGyro() {
-    #ifndef BMI160_CALIBRATION_GYRO_SECONDS
-        static_assert(false, "BMI160_CALIBRATION_GYRO_SECONDS not set in defines");
-    #endif
-
-    #if BMI160_CALIBRATION_GYRO_SECONDS == 0
-        m_Logger.debug("Skipping gyro calibration");
-        return;
-    #endif
-
-    // Wait for sensor to calm down before calibration
-    constexpr uint8_t GYRO_CALIBRATION_DELAY_SEC = 0;
     constexpr float GYRO_CALIBRATION_DURATION_SEC = BMI160_CALIBRATION_GYRO_SECONDS;
     m_Logger.info("Put down the device and wait for baseline gyro reading calibration (%.1f seconds)", GYRO_CALIBRATION_DURATION_SEC);
-    ledManager.on();
-    for (uint8_t i = GYRO_CALIBRATION_DELAY_SEC; i > 0; i--) {
-        m_Logger.info("%i...", i);
-        delay(1000);
-    }
     ledManager.off();
 
     if (!getTemperature(&temperature)) {
@@ -687,7 +777,7 @@ void LSM6DSRSensor::maybeCalibrateAccel() {
         m_Logger.debug("Calculating accelerometer calibration data...");
     #elif BMI160_ACCEL_CALIBRATION_METHOD == ACCEL_CALIBRATION_METHOD_6POINT
         RestDetectionParams calibrationRestDetectionParams;
-        calibrationRestDetectionParams.restMinTime = 0.5;
+        calibrationRestDetectionParams.restMinTimeMicros = 500000;
         calibrationRestDetectionParams.restThAcc = 0.25f;
         RestDetection calibrationRestDetection(
             calibrationRestDetectionParams,
@@ -696,11 +786,11 @@ void LSM6DSRSensor::maybeCalibrateAccel() {
         );
 
         constexpr uint16_t expectedPositions = 6;
-        constexpr uint16_t numSamplesPerPosition = 32;
+        constexpr uint16_t numSamplesPerPosition = 64;
 
         uint16_t numPositionsRecorded = 0;
         uint16_t numCurrentPositionSamples = 0;
-        bool waitForMotion = true;
+        bool waitForMotion = false;
 
         float* accelCalibrationChunk = new float[numSamplesPerPosition * 3];
         ledManager.pattern(100, 100, 6);
@@ -714,7 +804,6 @@ void LSM6DSRSensor::maybeCalibrateAccel() {
             scaled[0] = ax * LSM6DSR_ASCALE;
             scaled[1] = ay * LSM6DSR_ASCALE;
             scaled[2] = az * LSM6DSR_ASCALE;
-
             calibrationRestDetection.updateAcc(LSM6DSR_ODR_ACC_MICROS, scaled);
 
             if (waitForMotion) {
@@ -788,128 +877,12 @@ void LSM6DSRSensor::maybeCalibrateMag() {
         m_Logger.debug("Skipping magnetometer calibration");
         return;
     #endif
-
-    ledManager.off();
-    constexpr uint8_t CaliSamples=240;
-    constexpr int MagTolerance=40;
-    int16_t Cx[CaliSamples]={},Cy[CaliSamples]={},Cz[CaliSamples]={};
-    uint8_t Cf=0, Cr=CaliSamples-1;
-    int8_t ignoreList[CaliSamples]={};
-    float cali[4][3];
-    int16_t mx,my,mz;
-    MagnetoCalibration* magneto = new MagnetoCalibration();
-    imu.getMagnetometer(&mx,&my,&mz);
-    Cx[0]=mx; Cy[0]=my;Cz[0]=mz;
-
-    while(Cf!=Cr){
-        imu.getMagnetometer(&mx,&my,&mz);
-        ledManager.on();
-        if (abs(Cx[Cf] - mx) > MagTolerance || abs(Cy[Cf] - my) > MagTolerance || abs(Cz[Cf] - mz) > MagTolerance)
-        {
-            ledManager.off();
-            if(Cf==0 && Cr == CaliSamples-1) Serial.print("Starting Magneto Calibration");
-            Cf++;
-            if (Cf >= CaliSamples)
-                Cf = 0;
-            Cx[Cf] = mx;
-            Cy[Cf] = my;
-            Cz[Cf] = mz;
-            if (Cf == Cr)
-            {
-                delete magneto;
-                magneto = new MagnetoCalibration();
-                for (uint8_t i = 0; i < CaliSamples; i++)
-                {
-                    if(!ignoreList[i])
-                        magneto->sample(Cx[i],Cy[i],Cz[i]);
-                }
-                magneto->current_calibration(cali);
-
-                //VerifyMagCali
-                    uint8_t invalidCnt = 0;
-                    float avgstr = 0.0f;
-                    for (uint8_t i = 0; i < CaliSamples; i++)
-                    {
-                        float tx, ty, tz;
-                        float x, y, z;
-                        tx = Cx[i] - cali[0][0];
-                        ty = Cy[i] - cali[0][1];
-                        tz = Cz[i] - cali[0][2];
-                #if useFullCalibrationMatrix == true
-                        x = cali.M_Ainv[0][0] * tx + cali.M_Ainv[0][1] * ty + cali.M_Ainv[0][2] * tz;
-                        y = cali.M_Ainv[1][0] * tx + cali.M_Ainv[1][1] * ty + cali.M_Ainv[1][2] * tz;
-                        z = cali.M_Ainv[2][0] * tx + cali.M_Ainv[2][1] * ty + cali.M_Ainv[2][2] * tz;
-                #else
-                        x = tx;
-                        y = ty;
-                        z = tz;
-                #endif
-                        avgstr += sqrt(sq(x) + sq(y) + sq(z)) / CaliSamples;
-                    }
-                    if(isnan(avgstr)) continue;
-
-                    m_Logger.debug("Average Mag strength with given calibration : %.1f\n", avgstr);
-                    for (uint8_t i = 0; i < CaliSamples; i++)
-                    {
-                        float tx, ty, tz;
-                        float x, y, z;
-                        tx = Cx[i] - cali[0][0];
-                        ty = Cy[i] - cali[0][1];
-                        tz = Cz[i] - cali[0][2];
-                #if useFullCalibrationMatrix == true
-                        x = cali.M_Ainv[0][0] * tx + cali.M_Ainv[0][1] * ty + cali.M_Ainv[0][2] * tz;
-                        y = cali.M_Ainv[1][0] * tx + cali.M_Ainv[1][1] * ty + cali.M_Ainv[1][2] * tz;
-                        z = cali.M_Ainv[2][0] * tx + cali.M_Ainv[2][1] * ty + cali.M_Ainv[2][2] * tz;
-                #else
-                        x = tx;
-                        y = ty;
-                        z = tz;
-                #endif
-                        // Serial.printf(" %.1f \n", magstr[i]);
-                        if (!(abs(avgstr - sqrt(sq(x) + sq(y) + sq(z))) < 20)){
-                            invalidCnt++;
-                            ignoreList[i]=1;
-                        }
-                        else ignoreList[i]=0;
-                    }
-                    if (invalidCnt < CaliSamples / 6)
-                    {
-                        Serial.print("New calibration valid\n");
-                        delete magneto;
-                        magneto = new MagnetoCalibration();
-                        for (uint8_t i = 0; i < CaliSamples; i++)
-                        {
-                            if(!ignoreList[i])
-                                magneto->sample(Cx[i],Cy[i],Cz[i]);
-                        }
-                        magneto->current_calibration(cali);
-                        break;
-                    }
-                    else{
-                        for(uint8_t i=0; i< CaliSamples; i++)
-                            ignoreList[i]=0;
-                        delete magneto;
-                        magneto = new MagnetoCalibration();
-                    }
-                Cr += CaliSamples / 4;
-                if (Cr >= CaliSamples)
-                    Cr -= CaliSamples;
-            }
-        }
-        delay(10);
-    }
-    delete magneto;
-
-    m_Logger.debug("[INFO] Magnetometer calibration matrix:");
-    m_Logger.debug("{");
-    for (int i = 0; i < 3; i++) {
-        m_Calibration.M_B[i] = cali[0][i];
-        m_Calibration.M_Ainv[0][i] = cali[1][i];
-        m_Calibration.M_Ainv[1][i] = cali[2][i];
-        m_Calibration.M_Ainv[2][i] = cali[3][i];
-        m_Logger.debug("  %f, %f, %f, %f", cali[0][i], cali[1][i], cali[2][i], cali[3][i]);
-    }
-    m_Logger.debug("}");
+    magCalibrating = true;
+    
+    Cx = new int16_t[CaliSamples],Cy = new int16_t[CaliSamples],Cz = new int16_t[CaliSamples];
+    Cf=0; Cr=CaliSamples-1;
+    ignoreList = new int8_t[CaliSamples];
+    imu.getMagnetometer(Cx,Cy,Cz);
 }
 
 void LSM6DSRSensor::remapGyroAccel(sensor_real_t* x, sensor_real_t* y, sensor_real_t* z) {

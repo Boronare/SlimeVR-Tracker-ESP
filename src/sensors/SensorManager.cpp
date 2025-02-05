@@ -35,7 +35,7 @@
 #if IMU == IMU_MPU6050
 #include "mpu6050sensor.h"
 #endif
-#if IMU == IMU_BMI160
+#if IMU == IMU_BMI160 || SECOND_IMU == IMU_BMI160
 #include "bmi160sensor.h"
 #endif
 #if IMU == IMU_ICM20948
@@ -115,7 +115,7 @@ namespace SlimeVR
                 sensor = new MPU9250Sensor(sensorID, address, rotation, sclPin, sdaPin);
                 break;
 #endif
-#if IMU == IMU_BMI160
+#if IMU == IMU_BMI160 || SECOND_IMU == IMU_BMI160
             case IMU_BMI160:
                 // Extra param used as axis remap descriptor
                 {

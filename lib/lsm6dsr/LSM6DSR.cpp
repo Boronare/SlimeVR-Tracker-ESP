@@ -83,17 +83,19 @@ void LSM6DSR::initialize(uint8_t addr,
     lsm6dsr_odr_xl_t accelRate, lsm6dsr_fs_xl_t accelRange)
 {
     devAddr = addr;
-    setRegister(LSM6DSR_CTRL3_C, 0b00000011); // SW_RESET
-    delay(50);
+    setRegister(LSM6DSR_CTRL3_C, 0b00000101); // SW_RESET
+    setRegister(LSM6DSR_FUNC_CFG_ACCESS,0);
+    delay(100);
     setGyroRate(gyroRate);
     setAccelRate(accelRate);
     setFullScaleGyroRange(gyroRange);
     setFullScaleAccelRange(accelRange);
-    setTimestampEnabled(true);
+    setTimestampEnabled(false);
     
-    setRegister(LSM6DSR_CTRL4_C, 0b00000010);//Enable LPF
-    // setRegister(LSM6DSR_CTRL6_C, 0b00010010);
-    // setRegister(LSM6DSR_CTRL7_G, 0b01010000);//Enable HPF
+    setRegister(LSM6DSR_CTRL4_C, 0b00000000);//Disable LPF
+    // setRegister(LSM6DSR_CTRL4_C, 0b00000010);//Enable LPF
+    // setRegister(LSM6DSR_CTRL6_C, 0b00010010);//Enable High-Performance-Mode
+    setRegister(LSM6DSR_CTRL7_G, 0b10010000);//Enable HPF
 
     delay(50);
 }
@@ -118,27 +120,25 @@ void LSM6DSR::setRegister(uint8_t reg, uint8_t data) {
 
 void LSM6DSR::setMagDevice(uint8_t addr,uint8_t regAddr,uint8_t odr) {
     accessSensorhub();
-    delay(3);
-    setRegister(LSM6DSR_MASTER_CONFIG,0b00000101);
+    setRegister(LSM6DSR_MASTER_CONFIG,0b10000000);
+    delay(100);
+    setRegister(LSM6DSR_MASTER_CONFIG,0b01000101);
     setRegister(LSM6DSR_SLV0_ADD, addr << 1); // 0 bit of address is reserved and needs to be shifted
     setRegister(LSM6DSR_SLV0_CONFIG, odr<<6|0|0);
     setRegister(LSM6DSR_SLV1_ADD, addr << 1|1); // read mode enabled
     setRegister(LSM6DSR_SLV1_SUBADD, regAddr);
     setRegister(LSM6DSR_SLV1_CONFIG, 8|6);
-    delay(3);
-    accessDefault();
-    delay(3);
+    delay(100);
 }
 
 void LSM6DSR::setMagRegister(uint8_t addr, uint8_t value) {
     accessSensorhub();
-    delay(3);
     setRegister(LSM6DSR_SLV0_SUBADD, addr);
     setRegister(LSM6DSR_DATAWRITE_SLV0, value);
     setRegister(LSM6DSR_MASTER_CONFIG,0b01000101);
-    delay(3);
-    accessDefault();
-    delay(3);
+    delay(10);
+    while(!(getRegister(LSM6DSR_STATUS_MASTER)&0x80))
+        delay(1);
 }
 
 /** Get Device ID.
@@ -147,6 +147,7 @@ void LSM6DSR::setMagRegister(uint8_t addr, uint8_t value) {
  * @see BMI160_RA_CHIP_ID
  */
 uint8_t LSM6DSR::getDeviceID() {
+    accessDefault();
     I2CdevMod::readByte(devAddr, LSM6DSR_WHO_AM_I, buffer);
     return buffer[0];
 }
@@ -157,6 +158,7 @@ uint8_t LSM6DSR::getDeviceID() {
  */
 bool LSM6DSR::testConnection()
 {
+    accessDefault();
     uint8_t device_id = getDeviceID();
     return (LSM6DSR_ID == device_id);
 }
@@ -168,6 +170,7 @@ bool LSM6DSR::testConnection()
  * @see BMI160_RA_GYRO_CONF
  */
 void LSM6DSR::setGyroRate(uint8_t rate) {
+    accessDefault();
     I2CdevMod::writeBits(devAddr, LSM6DSR_CTRL2_G,
                    4,
                    4, rate);
@@ -179,6 +182,7 @@ void LSM6DSR::setGyroRate(uint8_t rate) {
  * @see BMI160_RA_ACCEL_CONF
  */
 void LSM6DSR::setAccelRate(uint8_t rate) {
+    accessDefault();
     I2CdevMod::writeBits(devAddr, LSM6DSR_CTRL1_XL,
                    4,
                    4, rate);
@@ -201,6 +205,7 @@ void LSM6DSR::setAccelRate(uint8_t rate) {
  * @see BMI160GyroRange
  */
 uint8_t LSM6DSR::getFullScaleGyroRange() {
+    accessDefault();
     I2CdevMod::readBits(devAddr, LSM6DSR_CTRL2_G,
                          0,
                          4, buffer);
@@ -212,6 +217,7 @@ uint8_t LSM6DSR::getFullScaleGyroRange() {
  * @see getFullScaleGyroRange()
  */
 void LSM6DSR::setFullScaleGyroRange(uint8_t range) {
+    accessDefault();
     I2CdevMod::writeBits(devAddr, LSM6DSR_CTRL2_G,
                    0,
                    4, range);
@@ -233,6 +239,7 @@ void LSM6DSR::setFullScaleGyroRange(uint8_t range) {
  * @see BMI160AccelRange
  */
 uint8_t LSM6DSR::getFullScaleAccelRange() {
+    accessDefault();
     I2CdevMod::readBits(devAddr, LSM6DSR_CTRL1_XL,
                          2,
                          2, buffer);
@@ -245,6 +252,7 @@ uint8_t LSM6DSR::getFullScaleAccelRange() {
  * @see BMI160AccelRange
  */
 void LSM6DSR::setFullScaleAccelRange(uint8_t range) {
+    accessDefault();
     I2CdevMod::writeBits(devAddr, LSM6DSR_CTRL1_XL,
                    2,
                    2, range);
@@ -263,6 +271,7 @@ void LSM6DSR::setFullScaleAccelRange(uint8_t range) {
  * @see BMI160_RA_FIFO_LENGTH_0
  */
 bool LSM6DSR::getFIFOCount(uint16_t* outCount) {
+    accessDefault();
     bool ok = I2CdevMod::readBytes(devAddr, LSM6DSR_FIFO_STATUS1, 2, buffer) >= 0;
     if (!ok) return false;
     *outCount = (((int16_t)buffer[1]&0b11) << 8) | buffer[0];
@@ -277,6 +286,7 @@ bool LSM6DSR::getFIFOCount(uint16_t* outCount) {
  * @see BMI160_CMD_FIFO_FLUSH
  */
 void LSM6DSR::resetFIFO() {
+    accessDefault();
     disableFIFO();
     delay(1);
     enableFIFO();
@@ -309,6 +319,7 @@ void LSM6DSR::resetFIFO() {
  * @return Bool if value was read successfully
  */
 bool LSM6DSR::getFIFOBytes(uint8_t *data) {
+    accessDefault();
     bool ok = I2CdevMod::readBytes(devAddr, LSM6DSR_FIFO_DATA_OUT_TAG, 7, data) >= 0;
     return ok;
 }
@@ -326,6 +337,7 @@ bool LSM6DSR::getFIFOBytes(uint8_t *data) {
  * @see BMI160_RA_GYRO_X_L
  */
 void LSM6DSR::getMotion6(int16_t* ax, int16_t* ay, int16_t* az, int16_t* gx, int16_t* gy, int16_t* gz) {
+    accessDefault();
     I2CdevMod::readBytes(devAddr, LSM6DSR_OUTX_L_G, 12, buffer);
     *gx = (((int16_t)buffer[1])  << 8) | buffer[0];
     *gy = (((int16_t)buffer[3])  << 8) | buffer[2];
@@ -372,6 +384,7 @@ void LSM6DSR::getMotion6(int16_t* ax, int16_t* ay, int16_t* az, int16_t* gx, int
  * @see BMI160_RA_ACCEL_X_L
  */
 void LSM6DSR::getAcceleration(int16_t* x, int16_t* y, int16_t* z) {
+    accessDefault();
     I2CdevMod::readBytes(devAddr, LSM6DSR_OUTX_L_A, 6, buffer);
     *x = (((int16_t)buffer[1]) << 8) | buffer[0];
     *y = (((int16_t)buffer[3]) << 8) | buffer[2];
@@ -384,6 +397,7 @@ void LSM6DSR::getAcceleration(int16_t* x, int16_t* y, int16_t* z) {
  * @see BMI160_RA_ACCEL_X_L
  */
 int16_t LSM6DSR::getAccelerationX() {
+    accessDefault();
     I2CdevMod::readBytes(devAddr, LSM6DSR_OUTX_L_A, 2, buffer);
     return (((int16_t)buffer[1]) << 8) | buffer[0];
 }
@@ -393,7 +407,8 @@ int16_t LSM6DSR::getAccelerationX() {
  * @see getMotion6()
  * @see BMI160_RA_ACCEL_Y_L
  */
-int16_t LSM6DSR::getAccelerationY() {
+int16_t LSM6DSR::getAccelerationY() {\
+    accessDefault();
     I2CdevMod::readBytes(devAddr, LSM6DSR_OUTY_L_A, 2, buffer);
     return (((int16_t)buffer[1]) << 8) | buffer[0];
 }
@@ -404,6 +419,8 @@ int16_t LSM6DSR::getAccelerationY() {
  * @see BMI160_RA_ACCEL_Z_L
  */
 int16_t LSM6DSR::getAccelerationZ() {
+    
+        accessDefault();
     I2CdevMod::readBytes(devAddr, LSM6DSR_OUTZ_L_A, 2, buffer);
     return (((int16_t)buffer[1]) << 8) | buffer[0];
 }
@@ -514,21 +531,23 @@ void LSM6DSR::getMagnetometer(int16_t* mx, int16_t* my, int16_t* mz) {
     *mx = (((int32_t)buffer[0] << 8) | buffer[1])-32768;
     *my = (((int32_t)buffer[2] << 8) | buffer[3])-32768;
     *mz = (((int32_t)buffer[4] << 8) | buffer[5])-32768;
-    accessDefault();
 }
 
 void LSM6DSR::getMagnetometerXYZBuffer(uint8_t* data) {
     accessSensorhub();
     I2CdevMod::readBytes(devAddr, LSM6DSR_SENSOR_HUB_1, 6, data);
-    accessDefault();
 }
 
 bool LSM6DSR::getGyroDrdy() {
+    
+        accessDefault();
     I2CdevMod::readBits(devAddr, LSM6DSR_STATUS_REG, 1, 1, buffer);
     return buffer[0];
 }
 
 void LSM6DSR::waitForGyroDrdy() {
+    
+        accessDefault();
     do {
         getGyroDrdy();
         if (!buffer[0]) delayMicroseconds(150);
@@ -536,11 +555,15 @@ void LSM6DSR::waitForGyroDrdy() {
 }
 
 bool LSM6DSR::getAccelDrdy() {
+    
+        accessDefault();
     I2CdevMod::readBits(devAddr, LSM6DSR_STATUS_REG, 1, 0, buffer);
     return buffer[0];
 }
 
 void LSM6DSR::waitForAccelDrdy() {
+    
+        accessDefault();
     do {
         getAccelDrdy();
         if (!buffer[0]) delayMicroseconds(150);
@@ -548,28 +571,39 @@ void LSM6DSR::waitForAccelDrdy() {
 }
 
 bool LSM6DSR::getFIFOEnabled(){
+    
+        accessDefault();
     uint8_t data = getRegister(LSM6DSR_FIFO_CTRL4);
     return data&0b111;
 }
 void LSM6DSR::enableFIFO() {
+        accessDefault();
     uint8_t gr = getGyroRate();
     uint8_t ar = getAccelRate();
     setRegister(LSM6DSR_FIFO_CTRL3,gr<<4|ar);
-    setRegister(LSM6DSR_FIFO_CTRL4,0b01000110);
+    setRegister(LSM6DSR_FIFO_CTRL4,0b00000110);
 }
 void LSM6DSR::disableFIFO() {
+    
+        accessDefault();
     setRegister(LSM6DSR_FIFO_CTRL4,0b00000000);
 }
 
 void LSM6DSR::setTimestampEnabled(bool enabled){
+    
+        accessDefault();
     I2CdevMod::writeBit(devAddr, LSM6DSR_CTRL10_C,5,enabled);
 }
 bool LSM6DSR::getTimestampEnabled(){
+    
+        accessDefault();
     uint8_t enabled;
     enabled = I2CdevMod::readBit(devAddr,LSM6DSR_CTRL10_C,5,&enabled);
     return enabled;
 }
 bool LSM6DSR::getSensorTime(uint32_t *v_sensor_time_u32) {
+    
+        accessDefault();
     bool ok = I2CdevMod::readBytes(devAddr, LSM6DSR_TIMESTAMP0, 4, buffer) >= 0;
     if (!ok) return false;
     *v_sensor_time_u32 = (uint32_t)(
@@ -581,16 +615,31 @@ bool LSM6DSR::getSensorTime(uint32_t *v_sensor_time_u32) {
     return ok;
 }
 void LSM6DSR::accessDefault(){
+    if(accessing == 0) return;
    setRegister(LSM6DSR_FUNC_CFG_ACCESS,0);
+   Serial.println("accessing Default");
+   accessing = 0;
+   delay(50);
 }
 void LSM6DSR::accessSensorhub(){
+   if(accessing == 1) return;
    setRegister(LSM6DSR_FUNC_CFG_ACCESS,0b01000000);
-   delay(5);
+   Serial.println("accessing SensorHub");
+   accessing = 1;
+   delay(50);
 }
 void LSM6DSR::accessFunctions(){
+    if(accessing == 2) return;
    setRegister(LSM6DSR_FUNC_CFG_ACCESS,0b10000000);
+   delay(10);
+   Serial.println("accessing Functions");
+   setRegister(LSM6DSR_FUNC_CFG_ACCESS,0b10000000);
+   accessing = 2;
+   delay(30);
 }
 uint8_t LSM6DSR::getGyroRate(){
+    
+        accessDefault();
     uint8_t data;
     I2CdevMod::readBits(devAddr, LSM6DSR_CTRL2_G,
                    4,
@@ -598,9 +647,20 @@ uint8_t LSM6DSR::getGyroRate(){
     return data;
 }
 uint8_t LSM6DSR::getAccelRate(){
+    
+        accessDefault();
     uint8_t data;
     I2CdevMod::readBits(devAddr, LSM6DSR_CTRL1_XL,
                    4,
                    4, &data);
     return data;
+}
+
+float LSM6DSR::getFinedGyroODR(){
+    return (1.0+0.0015*getFreqFine())*6666.66/1024*(1<<getGyroRate());
+}
+int8_t LSM6DSR::getFreqFine() {
+    uint8_t buffer;
+    I2CdevMod::readByte(devAddr, LSM6DSR_INTERNAL_FREQ_FINE, &buffer);
+    return buffer;
 }

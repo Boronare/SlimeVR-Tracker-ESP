@@ -59,7 +59,7 @@
      AXIS_REMAP_AXIS_MAGX(mx) | AXIS_REMAP_AXIS_MAGY(my) | AXIS_REMAP_AXIS_MAGZ(mz))
 
 #define AXIS_REMAP_DEFAULT AXIS_REMAP_BUILD(AXIS_REMAP_USE_X, AXIS_REMAP_USE_Y, AXIS_REMAP_USE_Z, \
-                                                AXIS_REMAP_USE_X, AXIS_REMAP_USE_Y, AXIS_REMAP_USE_Z)
+                                                AXIS_REMAP_USE_YN, AXIS_REMAP_USE_X, AXIS_REMAP_USE_Z)
 
 // Template functions for remapping
 template<typename T>

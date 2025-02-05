@@ -76,7 +76,7 @@
 // If "false" updates are sent at the sensor update rate (usually 100 TPS)
 // If "true" updates will be less frequent in the time of little motion
 // Experimental
-#define OPTIMIZE_UPDATES true
+#define OPTIMIZE_UPDATES true//true
 
 #define I2C_SPEED 400000
 
