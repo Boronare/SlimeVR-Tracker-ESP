@@ -62,7 +62,7 @@ enum class ImuID {
 #define IMU_LSM6DS3TRC SoftFusionLSM6DS3TRC
 #define IMU_LSM6DSV SoftFusionLSM6DSV
 #define IMU_LSM6DSO SoftFusionLSM6DSO
-#define IMU_LSM6DSR SoftFusionLSM6DSR
+#define IMU_LSM6DSR LSM6DSRSensor
 #define IMU_MPU6050_SF SoftFusionMPU6050
 #define IMU_ICM45686 SoftFusionICM45686
 #define IMU_ICM45605 SoftFusionICM45605
