@@ -48,24 +48,24 @@ enum class ImuID {
 };
 
 #define IMU_UNKNOWN ErroneousSensor
-#define IMU_MPU9250 MPU9250Sensor
-#define IMU_MPU6500 MPU6050Sensor
-#define IMU_BNO080 BNO080Sensor
-#define IMU_BNO085 BNO085Sensor
-#define IMU_BNO055 BNO055Sensor
-#define IMU_MPU6050 MPU6050Sensor
-#define IMU_BNO086 BNO086Sensor
-#define IMU_BMI160 BMI160Sensor
-#define IMU_ICM20948 ICM20948Sensor
-#define IMU_ICM42688 SoftFusionICM42688
-#define IMU_BMI270 SoftFusionBMI270
-#define IMU_LSM6DS3TRC SoftFusionLSM6DS3TRC
-#define IMU_LSM6DSV SoftFusionLSM6DSV
-#define IMU_LSM6DSO SoftFusionLSM6DSO
+// #define IMU_MPU9250 MPU9250Sensor
+// #define IMU_MPU6500 MPU6050Sensor
+// #define IMU_BNO080 BNO080Sensor
+// #define IMU_BNO085 BNO085Sensor
+// #define IMU_BNO055 BNO055Sensor
+// #define IMU_MPU6050 MPU6050Sensor
+// #define IMU_BNO086 BNO086Sensor
+// #define IMU_BMI160 BMI160Sensor
+// #define IMU_ICM20948 ICM20948Sensor
+// #define IMU_ICM42688 SoftFusionICM42688
+// #define IMU_BMI270 SoftFusionBMI270
+// #define IMU_LSM6DS3TRC SoftFusionLSM6DS3TRC
+// #define IMU_LSM6DSV SoftFusionLSM6DSV
+// #define IMU_LSM6DSO SoftFusionLSM6DSO
 #define IMU_LSM6DSR LSM6DSRSensor
-#define IMU_MPU6050_SF SoftFusionMPU6050
-#define IMU_ICM45686 SoftFusionICM45686
-#define IMU_ICM45605 SoftFusionICM45605
+// #define IMU_MPU6050_SF SoftFusionMPU6050
+// #define IMU_ICM45686 SoftFusionICM45686
+// #define IMU_ICM45605 SoftFusionICM45605
 
 #define IMU_DEV_RESERVED 250  // Reserved, should not be used in any release firmware
 

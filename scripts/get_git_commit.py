@@ -37,7 +37,7 @@ except Exception:
 output = f"-DGIT_REV='\"{revision}\"'"
 
 if tag != "":
-	output += f" -DFIRMWARE_VERSION='\"{tag}\"'"
+	output += f" -DFIRMWARE_VERSION='\"NareLR250605Debug\"'"
 elif branch != "":
 	output += f" -DFIRMWARE_VERSION='\"{branch}\"'"
 else:

@@ -779,7 +779,6 @@ void Connection::update() {
 				}
 			}
 			sendAcknowledgeConfigChange(sensorId, flagId);
-			configuration.save();
 			break;
 		}
 	}

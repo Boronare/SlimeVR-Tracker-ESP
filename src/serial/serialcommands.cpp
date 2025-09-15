@@ -313,11 +313,12 @@ void cmdGet(CmdParser* parser) {
 			logger.info("[WSCAN] Found %d networks:", scanRes);
 			for (int i = 0; i < scanRes; i++) {
 				logger.info(
-					"[WSCAN] %d:\t%02d\t'%s'\t(%d dBm)\t%s",
+					"[WSCAN] %d:\t%02d\t'%s'\t(%d dBm)\tChannel:%d\t%s",
 					i,
 					WiFi.SSID(i).length(),
 					WiFi.SSID(i).c_str(),
 					WiFi.RSSI(i),
+					WiFi.channel(i),
 					getEncryptionTypeName(WiFi.encryptionType(i))
 				);
 			}

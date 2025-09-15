@@ -61,6 +61,7 @@ struct LSM6DSRSensorConfig {
 	// calibration temperature for dynamic compensation
 	float temperature;
 	uint8_t flags;
+	//bits : 0 - mag enabled
 };
 
 

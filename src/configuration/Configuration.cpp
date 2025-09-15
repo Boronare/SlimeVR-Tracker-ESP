@@ -377,6 +377,39 @@ void Configuration::print() {
 				m_Logger.info("            magEnabled: %d", c.data.bno0XX.magEnabled);
 
 				break;
+			case SensorConfigType::LSM6DSR:
+				m_Logger.info(
+					"            A_B   : %f, %f, %f",
+					UNPACK_VECTOR_ARRAY(c.data.lsm6dsr.A_B)
+				);
+
+				m_Logger.info("            A_Ainv:");
+				for (uint8_t i = 0; i < 3; i++) {
+					m_Logger.info(
+						"                    %f, %f, %f",
+						UNPACK_VECTOR_ARRAY(c.data.lsm6dsr.A_Ainv[i])
+					);
+				}
+
+				m_Logger.info(
+					"            M_B   : %f, %f, %f",
+					UNPACK_VECTOR_ARRAY(c.data.lsm6dsr.M_B)
+				);
+
+				m_Logger.info("            M_Ainv:");
+				for (uint8_t i = 0; i < 3; i++) {
+					m_Logger.info(
+						"                    %f, %f, %f",
+						UNPACK_VECTOR_ARRAY(c.data.lsm6dsr.M_Ainv[i])
+					);
+				}
+
+				m_Logger.info(
+					"            G_off  : %f, %f, %f",
+					UNPACK_VECTOR_ARRAY(c.data.lsm6dsr.G_off)
+				);
+				m_Logger.info("			flags: %02x", c.data.lsm6dsr.flags);
+				break;
 		}
 	}
 }

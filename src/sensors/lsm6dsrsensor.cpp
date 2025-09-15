@@ -49,7 +49,6 @@ void LSM6DSRSensor::initMMC(){    /* Configure MAG interface and setup mode */
     imu.viaSensorhub();
 
     imu.setMagDevice(0x30,0x00);
-    // delay(50);
 }
 
 void LSM6DSRSensor::motionSetup() {
@@ -138,6 +137,10 @@ void LSM6DSRSensor::motionSetup() {
         if(magStatus == MagnetometerStatus::MAG_ENABLED){
             if(!hasMagCalibration()) startCalibration(0);
             else initMMC();
+        }else{
+            //if mag not enabled, turn off the magnetometer
+            imu.setMagRegister(0x1D, 0x00);
+            imu.viaSensorhub();
         }
     }
     {
@@ -162,7 +165,7 @@ void LSM6DSRSensor::motionSetup() {
 
     imu.resetFIFO();
     delay(2);
-
+    m_status = SensorStatus::SENSOR_OK;
     working = true;
 }
 
@@ -178,7 +181,7 @@ void LSM6DSRSensor::motionLoop() {
 
     {
         uint32_t now = micros();
-        constexpr uint32_t LSM6DSR_TARGET_POLL_INTERVAL_MICROS = 6000;
+        constexpr uint32_t LSM6DSR_TARGET_POLL_INTERVAL_MICROS = 16000;
         uint32_t elapsed = now - lastPollTime;
         if (elapsed >= LSM6DSR_TARGET_POLL_INTERVAL_MICROS) {
             lastPollTime = now - (elapsed - LSM6DSR_TARGET_POLL_INTERVAL_MICROS);
@@ -186,13 +189,14 @@ void LSM6DSRSensor::motionLoop() {
             readFIFO();
             optimistic_yield(100);
             if (!sfusion.isUpdated()) return;
+            hadData = true;
             sfusion.clearUpdated();
         }
     }
 
     {
         uint32_t now = micros();
-        constexpr float maxSendRateHz = 2.0f;
+        constexpr float maxSendRateHz = 0.5f;
         constexpr uint32_t sendInterval = 1.0f/maxSendRateHz * 1e6;
         uint32_t elapsed = now - lastTemperaturePacketSent;
         if (elapsed >= sendInterval) {
@@ -212,6 +216,12 @@ void LSM6DSRSensor::motionLoop() {
 
             setFusedRotation(sfusion.getQuaternionQuat());
             setAcceleration(sfusion.getLinearAccVec());
+            if(CaliDebug){
+                setFusedRotation(Quat(Vector3(1,0,0),PI/2)*Quat(Vector3(Gxyz[0],Gxyz[1],Gxyz[2])));
+                if(magStatus == MagnetometerStatus::MAG_ENABLED)
+                    setAcceleration(Vector3(Mxyz[0],Mxyz[1],Mxyz[2]));
+                newFusedRotation = true;
+            }
             optimistic_yield(100);
         }
         if(calibrationDetector.update(sfusion)){
@@ -303,9 +313,7 @@ void LSM6DSRSensor::readFIFO() {
         }
     }
     if(samples){
-        // onGyroRawSample((timestamp1-timestamp0)*25,(float)sgx/samples,(float)sgy/samples,(float)sgz/samples);
         onGyroRawSample(actualSensorMicros*samples,(float)sgx/samples,(float)sgy/samples,(float)sgz/samples);
-        timestamp0 = timestamp1;
     }
 }
 
@@ -353,15 +361,15 @@ void LSM6DSRSensor::onMagRawSample(uint32_t dtMicros, int16_t x, int16_t y, int1
             Serial.printf("Mag Sample:%d %d %d\n",x,y,z);
             if (Cf == Cr)
             {
-                MagnetoCalibration magneto;
+                MagnetoCalibration* magneto = new MagnetoCalibration();
                 float cali[4][3];
                 for (uint8_t i = 0; i < CaliSamples; i++)
                 {
                     if(!ignoreList[i])
-                        magneto.sample(Cx[i],Cy[i],Cz[i]);
+                        magneto->sample(Cx[i],Cy[i],Cz[i]);
                 }
-                magneto.current_calibration(cali);
-
+                magneto->current_calibration(cali);
+                delete magneto;
                 //VerifyMagCali
                     uint8_t invalidCnt = 0;
                     float avgstr = 0.0f;
@@ -412,13 +420,14 @@ void LSM6DSRSensor::onMagRawSample(uint32_t dtMicros, int16_t x, int16_t y, int1
                     if (invalidCnt < CaliSamples / 6)
                     {
                         Serial.print("New calibration valid\n");
-                        MagnetoCalibration sec;
+                        magneto = new MagnetoCalibration();
                         for (uint8_t i = 0; i < CaliSamples; i++)
                         {
                             if(!ignoreList[i])
-                                sec.sample(Cx[i],Cy[i],Cz[i]);
+                                magneto->sample(Cx[i],Cy[i],Cz[i]);
                         }
-                        sec.current_calibration(cali);
+                        magneto->current_calibration(cali);
+                        delete magneto;
 
                         magCalibrating=false;
                         delete Cx;
@@ -450,6 +459,7 @@ void LSM6DSRSensor::onMagRawSample(uint32_t dtMicros, int16_t x, int16_t y, int1
                 Cr += CaliSamples / 4;
                 if (Cr >= CaliSamples)
                     Cr -= CaliSamples;
+                imu.resetFIFO();
             }
         }
     }
@@ -499,7 +509,6 @@ void LSM6DSRSensor::applyAccelCalibrationAndScale(sensor_real_t Axyz[3]) {
 }
 
 void LSM6DSRSensor::applyMagCalibrationAndScale(sensor_real_t Mxyz[3]) {
-    #if !USE_6_AXIS
         //apply offsets and scale factors from Magneto
         #if useFullCalibrationMatrix == true
             float temp[3];
@@ -512,7 +521,6 @@ void LSM6DSRSensor::applyMagCalibrationAndScale(sensor_real_t Mxyz[3]) {
             for (uint8_t i = 0; i < 3; i++)
                 Mxyz[i] = (Mxyz[i] - m_Config.M_B[i]);
         #endif
-    #endif
 }
 
 bool LSM6DSRSensor::hasGyroCalibration() {
@@ -546,6 +554,7 @@ bool LSM6DSRSensor::hasMagCalibration() {
 }
 
 void LSM6DSRSensor::startCalibration(int calibrationType) {
+    CaliDebug = true;
     SlimeVR::Configuration::SensorConfig calibration;
     calibration.type = SlimeVR::Configuration::SensorConfigType::LSM6DSR;
     ledManager.on();
@@ -677,7 +686,7 @@ void LSM6DSRSensor::maybeCalibrateAccel() {
         m_Logger.debug("Calculating accelerometer calibration data...");
     #elif BMI160_ACCEL_CALIBRATION_METHOD == ACCEL_CALIBRATION_METHOD_6POINT
         RestDetectionParams calibrationRestDetectionParams;
-        calibrationRestDetectionParams.restMinTime = 0.5;
+        calibrationRestDetectionParams.restMinTime = 1.0f;
         calibrationRestDetectionParams.restThAcc = 0.25f;
         RestDetection calibrationRestDetection(
             calibrationRestDetectionParams,

@@ -110,7 +110,8 @@ class LSM6DSRSensor : public Sensor {
         SensorStatus getSensorState() override final { return m_status; }
 	    void setFlag(uint16_t flagId, bool state) override {
             if (flagId == 1) {
-                m_Config.flags = state;
+                if(m_Config.flags&1 == state) return;
+                m_Config.flags = (m_Config.flags&0b11111110) + state;
                 magStatus = state ? MagnetometerStatus::MAG_ENABLED
                                 : MagnetometerStatus::MAG_DISABLED;
 
@@ -118,6 +119,7 @@ class LSM6DSRSensor : public Sensor {
                 config.type = SlimeVR::Configuration::SensorConfigType::LSM6DSR;
                 config.data.lsm6dsr = m_Config;
                 configuration.setSensor(sensorId, config);
+                configuration.save();
 
                 // Reinitialize the sensor
                 motionSetup();
@@ -155,19 +157,11 @@ class LSM6DSRSensor : public Sensor {
         SlimeVR::Sensors::SensorFusionRestDetect sfusion;
 
         // clock sync and sample timestamping
-        uint32_t sensorTime0 = 0;
-        uint32_t sensorTime1 = 0;
-        uint32_t localTime0 = 0;
-        uint32_t localTime1 = 0;
-        double sensorTimeRatio = 1;
-        double sensorTimeRatioEma = 1;
         double sampleDtMicros = LSM6DSR_ODR_GYR_MICROS;
-        uint32_t syncLatencyMicros = 0;
-        uint32_t samplesSinceClockSync = 0;
-        uint32_t timestamp0 = 0;
         uint32_t timestamp1 = 0;
         uint32_t actualSensorMicros = 0;
         bool magCalibrating = false;
+        bool CaliDebug = false;
         int16_t *Cx,*Cy,*Cz;
         int8_t *ignoreList;
         uint8_t Cf = 0, Cr = 0;
