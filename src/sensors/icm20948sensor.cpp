@@ -46,9 +46,12 @@ void ICM20948Sensor::motionSetup() {
 	loadCalibration();
 	startMotionLoop();
 	startCalibrationAutoSave();
+	m_tpsCounter.reset();
+	m_dataCounter.reset();
 }
 
 void ICM20948Sensor::motionLoop() {
+	m_tpsCounter.update();
 #if ENABLE_INSPECTION
 	{
 		(void)imu.getAGMT();
@@ -325,7 +328,7 @@ void ICM20948Sensor::checkSensorTimeout() {
 	if (lastData + 2000 < currenttime) {
 		working = false;
 		m_Logger.error(
-			"Sensor timeout I2C Address 0x%02x delaytime: %d ms",
+			"Sensor timeout I2C Address 0x%02x delaytime: %ld ms",
 			addr,
 			currenttime - lastData
 		);

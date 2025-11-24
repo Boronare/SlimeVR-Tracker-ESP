@@ -26,14 +26,25 @@
 #include <Arduino.h>
 #include <WiFiUdp.h>
 
+#include <optional>
+
+#include "../configuration/SensorConfig.h"
 #include "featureflags.h"
 #include "globals.h"
+#include "packets.h"
 #include "quat.h"
 #include "sensors/sensor.h"
 #include "wifihandler.h"
 
-namespace SlimeVR {
-namespace Network {
+namespace SlimeVR::Network {
+
+#define MUST_TRANSFER_BOOL(b) \
+	if (!(b))                 \
+		return false;
+
+#define MUST(b) \
+	if (!(b))   \
+		return;
 
 class Connection {
 public:
@@ -84,6 +95,9 @@ public:
 	// PACKET_FEATURE_FLAGS 22
 	void sendFeatureFlags();
 
+	// PACKET_FLEX_DATA 26
+	void sendFlexData(uint8_t sensorId, float flexLevel);
+
 #if ENABLE_INSPECTION
 	void sendInspectionRawIMUData(
 		uint8_t sensorId,
@@ -123,9 +137,9 @@ public:
 	bool endBundle();
 
 private:
-	void updateSensorState(std::vector<std::unique_ptr<Sensor>>& sensors);
+	void updateSensorState(std::vector<std::unique_ptr<::Sensor>>& sensors);
 	void maybeRequestFeatureFlags();
-	bool isSensorStateUpdated(int i, std::unique_ptr<Sensor>& sensor);
+	bool isSensorStateUpdated(int i, std::unique_ptr<::Sensor>& sensor);
 
 	bool beginPacket();
 	bool endPacket();
@@ -133,7 +147,7 @@ private:
 	size_t write(const uint8_t* buffer, size_t size);
 	size_t write(uint8_t byte);
 
-	bool sendPacketType(uint8_t type);
+	bool sendPacketType(SendPacketType type);
 	bool sendPacketNumber();
 	bool sendFloat(float f);
 	bool sendByte(uint8_t c);
@@ -143,6 +157,46 @@ private:
 	bool sendBytes(const uint8_t* c, size_t length);
 	bool sendShortString(const char* str);
 	bool sendLongString(const char* str);
+
+	template <typename Packet>
+	bool sendPacket(
+		SendPacketType type,
+		Packet packet,
+		std::optional<uint64_t> packetNumberOverride = std::nullopt
+	) {
+		MUST_TRANSFER_BOOL(beginPacket());
+		MUST_TRANSFER_BOOL(sendPacketType(type));
+		if (packetNumberOverride) {
+			MUST_TRANSFER_BOOL(sendLong(*packetNumberOverride));
+		} else {
+			MUST_TRANSFER_BOOL(sendPacketNumber());
+		}
+
+		MUST_TRANSFER_BOOL(
+			sendBytes(reinterpret_cast<uint8_t*>(&packet), sizeof(Packet))
+		);
+
+		return endPacket();
+	}
+
+	template <typename Callback>
+	bool sendPacketCallback(
+		SendPacketType type,
+		Callback bodyCallback,
+		std::optional<uint64_t> packetNumberOverride = std::nullopt
+	) {
+		MUST_TRANSFER_BOOL(beginPacket());
+		MUST_TRANSFER_BOOL(sendPacketType(type));
+		if (packetNumberOverride) {
+			MUST_TRANSFER_BOOL(sendLong(*packetNumberOverride));
+		} else {
+			MUST_TRANSFER_BOOL(sendPacketNumber());
+		}
+
+		MUST_TRANSFER_BOOL(bodyCallback());
+
+		return endPacket();
+	}
 
 	int getWriteError();
 
@@ -155,9 +209,9 @@ private:
 	void sendTrackerDiscovery();
 
 	// PACKET_SENSOR_INFO 15
-	void sendSensorInfo(Sensor& sensor);
+	void sendSensorInfo(::Sensor& sensor);
 
-	void sendAcknowledgeConfigChange(uint8_t sensorId, uint16_t configType);
+	void sendAcknowledgeConfigChange(uint8_t sensorId, SensorToggles configType);
 
 	bool m_Connected = false;
 	SlimeVR::Logging::Logger m_Logger = SlimeVR::Logging::Logger("UDPConnection");
@@ -171,8 +225,10 @@ private:
 	unsigned long m_LastConnectionAttemptTimestamp;
 	unsigned long m_LastPacketTimestamp;
 
-	SensorStatus m_AckedSensorState[MAX_IMU_COUNT] = {SensorStatus::SENSOR_OFFLINE};
-	bool m_AckedSensorCalibration[MAX_IMU_COUNT] = {false};
+	SensorStatus m_AckedSensorState[MAX_SENSORS_COUNT] = {SensorStatus::SENSOR_OFFLINE};
+	SlimeVR::Configuration::SensorConfigBits m_AckedSensorConfigData[MAX_SENSORS_COUNT]
+		= {};
+	bool m_AckedSensorCalibration[MAX_SENSORS_COUNT] = {false};
 	unsigned long m_LastSensorInfoPacketTimestamp = 0;
 
 	uint8_t m_FeatureFlagsRequestAttempts = 0;
@@ -186,7 +242,6 @@ private:
 	unsigned char m_Buf[8];
 };
 
-}  // namespace Network
-}  // namespace SlimeVR
+}  // namespace SlimeVR::Network
 
 #endif  // SLIMEVR_NETWORK_CONNECTION_H_

@@ -31,7 +31,7 @@
 #include "logging/Logger.h"
 #include "utils.h"
 
-#if ESP32
+#ifdef ESP32
 #include "nvs_flash.h"
 #endif
 
@@ -155,6 +155,39 @@ void printState() {
 		statusManager.getStatus(),
 		WiFiNetwork::getWiFiState()
 	);
+
+	char vendorBuffer[512];
+	size_t writtenLength;
+
+	if (strlen(VENDOR_URL) == 0) {
+		sprintf(
+			vendorBuffer,
+			"Vendor: %s, product: %s%n",
+			VENDOR_NAME,
+			PRODUCT_NAME,
+			&writtenLength
+		);
+	} else {
+		sprintf(
+			vendorBuffer,
+			"Vendor: %s (%s), product: %s%n",
+			VENDOR_NAME,
+			VENDOR_URL,
+			PRODUCT_NAME,
+			&writtenLength
+		);
+	}
+
+	if (strlen(UPDATE_ADDRESS) > 0 && strlen(UPDATE_NAME) > 0) {
+		sprintf(
+			vendorBuffer + writtenLength,
+			", firmware update url: %s, name: %s",
+			UPDATE_ADDRESS,
+			UPDATE_NAME
+		);
+	}
+	logger.info("%s", vendorBuffer);
+
 	for (auto& sensor : sensorManager.getSensors()) {
 		logger.info(
 			"Sensor[%d]: %s (%.3f %.3f %.3f %.3f) is working: %s, had data: %s",
@@ -164,6 +197,10 @@ void printState() {
 			sensor->isWorking() ? "true" : "false",
 			sensor->getHadData() ? "true" : "false"
 		);
+		const char* mag = sensor->getAttachedMagnetometer();
+		if (mag) {
+			logger.info("Sensor[%d] magnetometer: %s", sensor->getSensorId(), mag);
+		}
 	}
 	logger.info(
 		"Battery voltage: %.3f, level: %.1f%%",
@@ -172,7 +209,7 @@ void printState() {
 	);
 }
 
-#if ESP32
+#ifdef ESP32
 String getEncryptionTypeName(wifi_auth_mode_t type) {
 	switch (type) {
 		case WIFI_AUTH_OPEN:
@@ -288,6 +325,14 @@ void cmdGet(CmdParser* parser) {
 			sensor0->isWorking() ? "true" : "false",
 			sensor0->getHadData() ? "true" : "false"
 		);
+
+		const char* mag = sensor0->getAttachedMagnetometer();
+		if (mag) {
+			logger.info("[TEST] Sensor[0] magnetometer: %s", mag);
+		} else {
+			logger.info("[TEST] Sensor[0] has no magnetometer attached");
+		}
+
 		if (!sensor0->getHadData()) {
 			logger.error("[TEST] Sensor[0] didn't send any data yet!");
 		} else {
@@ -319,7 +364,7 @@ void cmdGet(CmdParser* parser) {
 					WiFi.SSID(i).c_str(),
 					WiFi.RSSI(i),
 					WiFi.channel(i),
-					getEncryptionTypeName(WiFi.encryptionType(i))
+					getEncryptionTypeName(WiFi.encryptionType(i)).c_str()
 				);
 			}
 			WiFi.scanDelete();
@@ -347,7 +392,7 @@ void cmdFactoryReset(CmdParser* parser) {
 	WiFi.disconnect(true);  // Clear WiFi credentials
 #if ESP8266
 	ESP.eraseConfig();  // Clear ESP config
-#elif ESP32
+#elif defined(ESP32)
 	nvs_flash_erase();
 #else
 #warning SERIAL COMMAND FACTORY RESET NOT SUPPORTED
@@ -403,8 +448,14 @@ void cmdTemperatureCalibration(CmdParser* parser) {
 	logger.info("Note:");
 	logger.info(
 		"  Temperature calibration config saves automatically when calibration percent "
-		"is at 100%"
+		"is at 100%%"
 	);
+}
+
+void cmdDeleteCalibration(CmdParser* parser) {
+	logger.info("ERASE CALIBRATION");
+
+	configuration.eraseSensors();
 }
 
 void setUp() {
@@ -412,6 +463,7 @@ void setUp() {
 	cmdCallbacks.addCmd("GET", &cmdGet);
 	cmdCallbacks.addCmd("FRST", &cmdFactoryReset);
 	cmdCallbacks.addCmd("REBOOT", &cmdReboot);
+	cmdCallbacks.addCmd("DELCAL", &cmdDeleteCalibration);
 	cmdCallbacks.addCmd("TCAL", &cmdTemperatureCalibration);
 }
 

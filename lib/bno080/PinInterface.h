@@ -1,6 +1,6 @@
 /*
     SlimeVR Code is placed under the MIT license
-    Copyright (c) 2021 Eiren Rain
+    Copyright (c) 2024 Eiren Rain & SlimeVR contributors
 
     Permission is hereby granted, free of charge, to any person obtaining a copy
     of this software and associated documentation files (the "Software"), to deal
@@ -20,31 +20,18 @@
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
     THE SOFTWARE.
 */
+#pragma once
 
-#ifndef _MAHONY_H_
-#define _MAHONY_H_
+#include <cstdint>
+#include <string>
 
-#include "helper_3dmath.h"
-
-template<typename T>
-class Mahony {
-
-    // These are the free parameters in the Mahony filter and fusion scheme,
-    // Kp for proportional feedback, Ki for integral
-    // with MPU-9250, angles start oscillating at Kp=40. Ki does not seem to help and is not required.
-    static constexpr float Kp = 10.0f;
-    static constexpr float Ki = 0.0f;
-
+class PinInterface
+{
 public:
-    void update(T q[4], T ax, T ay, T az, T gx, T gy, T gz, T mx, T my, T mz, T deltat);
-    void update(T q[4], T ax, T ay, T az, T gx, T gy, T gz, T deltat);
-    
-private:
-    T ix = 0.0;
-    T iy = 0.0;
-    T iz = 0.0;
+	virtual bool init() { return true; };
+	virtual int digitalRead() = 0;
+	virtual void pinMode(uint8_t mode) = 0;
+	virtual void digitalWrite(uint8_t val) = 0;
+
+	[[nodiscard]] virtual std::string toString() const = 0;
 };
-
-#include "mahony.hpp"
-
-#endif /* _MAHONY_H_ */

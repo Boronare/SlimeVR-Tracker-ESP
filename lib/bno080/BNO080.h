@@ -49,6 +49,8 @@
 
 #include <Wire.h>
 #include <SPI.h>
+#include <memory>
+#include "PinInterface.h"
 
 //The default I2C address for the BNO080 on the SparkX breakout is 0x4B. 0x4A is also possible.
 #define BNO080_DEFAULT_ADDRESS 0x4B
@@ -150,8 +152,8 @@ struct BNO080Error {
 class BNO080
 {
 public:
-	boolean begin(uint8_t deviceAddress = BNO080_DEFAULT_ADDRESS, TwoWire &wirePort = Wire, uint8_t intPin = 255); //By default use the default I2C addres, and use Wire port, and don't declare an INT pin
-	boolean beginSPI(uint8_t user_CSPin, uint8_t user_WAKPin, uint8_t user_INTPin, uint8_t user_RSTPin, uint32_t spiPortSpeed = 3000000, SPIClass &spiPort = SPI);
+	boolean begin(uint8_t deviceAddress = BNO080_DEFAULT_ADDRESS, TwoWire &wirePort = Wire, PinInterface* intPin = nullptr); //By default use the default I2C addres, and use Wire port, and don't declare an INT pin
+	boolean beginSPI(PinInterface* user_CSPin, PinInterface* user_WAKPin, PinInterface* user_INTPin, PinInterface* user_RSTPin, uint32_t spiPortSpeed = 3000000, SPIClass &spiPort = SPI);
 
 	void enableDebugging(Stream &debugPort = Serial); //Turn on debug printing. If user doesn't specify then Serial will be used.
 
@@ -199,8 +201,11 @@ public:
 	bool hasNewGameQuat();
 	bool hasNewMagQuat();
 	void getQuat(float &i, float &j, float &k, float &real, float &radAccuracy, uint8_t &accuracy);
+	bool getNewQuat(float &i, float &j, float &k, float &real, float &radAccuracy, uint8_t &accuracy);
 	void getGameQuat(float &i, float &j, float &k, float &real, uint8_t &accuracy);
+	bool getNewGameQuat(float &i, float &j, float &k, float &real, uint8_t &accuracy);
 	void getMagQuat(float &i, float &j, float &k, float &real, float &radAccuracy, uint8_t &accuracy);
+	bool getNewMagQuat(float &i, float &j, float &k, float &real, float &radAccuracy, uint8_t &accuracy);
 	float getQuatI();
 	float getQuatJ();
 	float getQuatK();
@@ -209,6 +214,7 @@ public:
 	uint8_t getQuatAccuracy();
 
 	void getAccel(float &x, float &y, float &z, uint8_t &accuracy);
+	bool getNewAccel(float &x, float &y, float &z, uint8_t &accuracy);
 	float getAccelX();
 	float getAccelY();
 	float getAccelZ();
@@ -216,32 +222,39 @@ public:
 	bool hasNewAccel();
 
 	void getLinAccel(float &x, float &y, float &z, uint8_t &accuracy);
+	bool getNewLinAccel(float &x, float &y, float &z, uint8_t &accuracy);
 	float getLinAccelX();
 	float getLinAccelY();
 	float getLinAccelZ();
 	uint8_t getLinAccelAccuracy();
+	bool hasNewLinAccel();
 
 	void getGyro(float &x, float &y, float &z, uint8_t &accuracy);
 	float getGyroX();
 	float getGyroY();
 	float getGyroZ();
 	uint8_t getGyroAccuracy();
+	bool hasNewGyro();
 
 	void getFastGyro(float &x, float &y, float &z);
 	float getFastGyroX();
 	float getFastGyroY();
 	float getFastGyroZ();
+	bool hasNewFastGyro();
 
 	void getMag(float &x, float &y, float &z, uint8_t &accuracy);
 	float getMagX();
 	float getMagY();
 	float getMagZ();
 	uint8_t getMagAccuracy();
-	
+	bool hasNewMag();
+
 	void endCalibration();
 	void saveCalibration();
 	void requestCalibrationStatus(); //Sends command to get status
-	boolean calibrationComplete();   //Checks ME Cal response for byte 5, R0 - Status
+	bool calibrationComplete();   //Checks ME Cal response for byte 5, R0 - Status
+	bool hasNewCalibrationStatus();
+	void getCalibrationStatus(uint8_t &calibrationResponseStatus, uint8_t &accelCalEnabled, uint8_t &gyroCalEnabled, uint8_t &magCalEnabled, uint8_t &planarAccelCalEnabled, uint8_t &onTableCalEnabled);
 
 	uint8_t getTapDetector();
 	bool getTapDetected();
@@ -253,14 +266,25 @@ public:
 	int16_t getRawAccelX();
 	int16_t getRawAccelY();
 	int16_t getRawAccelZ();
+	void getRawAccel(int16_t &x, int16_t &y, int16_t &z, uint32_t &timeStamp);
+	bool getNewRawAccel(int16_t &x, int16_t &y, int16_t &z, uint32_t &timeStamp);
+	bool hasNewRawAccel();
 
 	int16_t getRawGyroX();
 	int16_t getRawGyroY();
 	int16_t getRawGyroZ();
+	float getGyroTemp();
+	void getRawGyro(int16_t &x, int16_t &y, int16_t &z, uint32_t &timeStamp);
+	bool getNewRawGyro(int16_t &x, int16_t &y, int16_t &z, uint32_t &timeStamp);
+	bool hasNewRawGyro();
+	void resetNewRawGyro();
 
 	int16_t getRawMagX();
 	int16_t getRawMagY();
 	int16_t getRawMagZ();
+	void getRawMag(int16_t &x, int16_t &y, int16_t &z, uint32_t &timeStamp);
+	bool getNewRawMag(int16_t &x, int16_t &y, int16_t &z, uint32_t &timeStamp);
+	bool hasNewRawMag();
 
 	float getRoll();
 	float getPitch();
@@ -270,6 +294,7 @@ public:
 	void setFeatureCommand(uint8_t reportID, uint16_t timeBetweenReports, uint32_t specificConfig);
 	void sendCommand(uint8_t command);
 	void sendCalibrateCommand(uint8_t thingToCalibrate);
+	void saveCalibrationPeriodically(bool save);
 
 	//Metadata functions
 	int16_t getQ1(uint16_t recordID);
@@ -308,10 +333,10 @@ private:
 
 	SPIClass *_spiPort;			 //The generic connection to user's chosen SPI hardware
 	unsigned long _spiPortSpeed; //Optional user defined port speed
-	uint8_t _cs;				 //Pins needed for SPI
-	uint8_t _wake;
-	uint8_t _int;
-	uint8_t _rst;
+	PinInterface* _cs;				 //Pins needed for SPI
+	PinInterface* _wake;
+	PinInterface* _int;
+	PinInterface* _rst;
 
 	//These are the raw sensor values (without Q applied) pulled from the user requested Input Report
 	uint16_t rawAccelX, rawAccelY, rawAccelZ, accelAccuracy;
@@ -321,7 +346,8 @@ private:
 	uint16_t rawQuatI, rawQuatJ, rawQuatK, rawQuatReal, rawQuatRadianAccuracy, quatAccuracy;
 	uint16_t rawGameQuatI, rawGameQuatJ, rawGameQuatK, rawGameQuatReal, quatGameAccuracy;
 	uint16_t rawMagQuatI, rawMagQuatJ, rawMagQuatK, rawMagQuatReal, rawMagQuatRadianAccuracy, quatMagAccuracy;
-	bool hasNewQuaternion, hasNewGameQuaternion, hasNewMagQuaternion, hasNewAccel_;
+	bool hasNewQuaternion, hasNewGameQuaternion, hasNewMagQuaternion, hasNewAccel_, hasNewLinAccel_, hasNewFastGyro_;
+	bool hasNewMag_, hasNewGyro_;
 	uint16_t rawFastGyroX, rawFastGyroY, rawFastGyroZ;
 	uint8_t tapDetector;
 	bool hasNewTap;
@@ -332,8 +358,12 @@ private:
 	uint8_t *_activityConfidences;						  //Array that store the confidences of the 9 possible activities
 	uint8_t calibrationStatus;							  //Byte R0 of ME Calibration Response
 	uint16_t memsRawAccelX, memsRawAccelY, memsRawAccelZ; //Raw readings from MEMS sensor
-	uint16_t memsRawGyroX, memsRawGyroY, memsRawGyroZ;	//Raw readings from MEMS sensor
+	uint16_t memsRawGyroX, memsRawGyroY, memsRawGyroZ, memsRawGyroTemp;	//Raw readings from MEMS sensor
 	uint16_t memsRawMagX, memsRawMagY, memsRawMagZ;		  //Raw readings from MEMS sensor
+	uint32_t memsAccelTimeStamp, memsGyroTimeStamp, memsMagTimeStamp;  //Timestamp of MEMS sensor reading
+	bool hasNewRawAccel_ = false;
+	bool hasNewRawGyro_= false;
+	bool hasNewRawMag_ = false;
 
 	//These Q values are defined in the datasheet but can also be obtained by querying the meta data records
 	//See the read metadata example for more info
@@ -344,4 +374,7 @@ private:
 	int16_t gyro_Q1 = 9;
 	int16_t magnetometer_Q1 = 4;
 	int16_t angular_velocity_Q1 = 10;
+
+	bool _hasNewCalibrationStatus = false;
+	uint8_t _calibrationResponseStatus, _accelCalEnabled, _gyroCalEnabled, _magCalEnabled, _planarAccelCalEnabled, _onTableCalEnabled;
 };
