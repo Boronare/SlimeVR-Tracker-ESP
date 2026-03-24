@@ -39,6 +39,8 @@
 		   // disable if problems. Server does nothing with value so disabled atm
 #define SEND_ACCELERATION true  // send linear acceleration to the server
 
+#define EXT_SERIAL_COMMANDS false  // Set to true to enable extra serial debug commands
+
 // Debug information
 
 #define LOG_LEVEL LOG_LEVEL_DEBUG
@@ -94,7 +96,7 @@
 // Not recommended for production
 #define ENABLE_INSPECTION false
 
-#define PROTOCOL_VERSION 21
+#define PROTOCOL_VERSION 22
 
 #ifndef FIRMWARE_VERSION
 #define FIRMWARE_VERSION "UNKNOWN"

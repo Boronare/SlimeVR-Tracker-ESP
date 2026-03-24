@@ -71,6 +71,26 @@ std::vector<MagDefinition> MagDriver::supportedMags{
 				return true;
 			},
 	},
+	MagDefinition{
+		.name = "MMC5603NJ",
+		.deviceId = 0x30,
+		.whoAmIReg = 0x39,
+		.expectedWhoAmI = 0x10,
+		.dataWidth = MagDataWidth::SixByte,
+		.dataReg = 0x03,
+
+		.setup =
+			[](MagInterface& interface) {
+				interface.writeByte(0x1C, 0x80);  // Soft reset
+				delay(100);
+				interface.writeByte(0x1C, 0x00);  // Set BW=00(6.6ms measurment time)
+				interface.writeByte(0x1A, 13);    // Set ODR = 13
+				interface.writeByte(0x1B, 0xA0);  // Enable Continuous mode & Auto SR
+				interface.writeByte(0x1D, 0x10);  // Start Continuous mode
+				return true;
+				    /* Configure MMC5603NJ Sensor */
+			},
+	}
 };
 
 bool MagDriver::init(MagInterface&& interface, bool supports9ByteMags) {

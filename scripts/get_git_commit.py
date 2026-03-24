@@ -36,8 +36,12 @@ except Exception:
 
 output = f"-DGIT_REV='\"{revision}\"'"
 
-if tag != "":
-	output += f" -DFIRMWARE_VERSION='\"NareLR250605Debug\"'"
+# fwVersion = os.environ.get("FIRMWARE_VERSION")
+fwVersion = "NareLR260202"
+if fwVersion is not None and fwVersion != "":
+	output += f" -DFIRMWARE_VERSION='\"{fwVersion}\"'"
+elif tag != "":
+	output += f" -DFIRMWARE_VERSION='\"{tag}\"'"
 elif branch != "":
 	output += f" -DFIRMWARE_VERSION='\"{branch}\"'"
 else:
