@@ -60,7 +60,7 @@
 #define samplingRateInMillis 10
 
 // Sleeping options
-#define POWERSAVING_MODE POWER_SAVING_MODERATE  // Minimum causes sporadic data pauses
+#define POWERSAVING_MODE POWER_SAVING_LEGACY  // Minimum causes sporadic data pauses
 #if POWERSAVING_MODE >= POWER_SAVING_MINIMUM
 #define TARGET_LOOPTIME_MICROS (samplingRateInMillis * 1000)
 #endif
@@ -106,10 +106,8 @@
 #define USE_RUNTIME_CALIBRATION true
 #endif
 
-#define DEBUG_MEASURE_SENSOR_TIME_TAKEN false
-
-#ifndef DEBUG_MEASURE_SENSOR_TIME_TAKEN
-#define DEBUG_MEASURE_SENSOR_TIME_TAKEN false
+#ifndef DEBUG_MEASURE_TIME_TAKEN
+#define DEBUG_MEASURE_TIME_TAKEN false
 #endif
 
 #ifndef USE_OTA_TIMEOUT

@@ -45,25 +45,6 @@ struct BMI160SensorConfig {
 	float temperature;
 };
 
-struct LSM6DSRSensorConfig {
-	// accelerometer offsets and correction matrix
-	float A_B[3];
-	float A_Ainv[3][3];
-
-	// magnetometer offsets and correction matrix
-	float M_B[3];
-	float M_Ainv[3][3];
-
-	// raw offsets, determined from gyro at rest
-	float G_off[3];
-
-	// calibration temperature for dynamic compensation
-	float temperature;
-	uint8_t flags;
-	//bits : 0 - mag enabled
-};
-
-
 struct SoftFusionSensorConfig {
 	SensorTypeID ImuType;
 	uint16_t MotionlessDataLen;
@@ -176,7 +157,6 @@ enum class SensorConfigType {
 	ICM20948,
 	SFUSION,
 	BNO0XX,
-	LSM6DSR,
 	RUNTIME_CALIBRATION,
 };
 
@@ -192,7 +172,6 @@ struct SensorConfig {
 		MPU9250SensorConfig mpu9250;
 		ICM20948SensorConfig icm20948;
 		BNO0XXSensorConfig bno0XX;
-		LSM6DSRSensorConfig lsm6dsr;
 		RuntimeCalibrationSensorConfig runtimeCalibration;
 	} data;
 };

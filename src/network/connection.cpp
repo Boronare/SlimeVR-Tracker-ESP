@@ -193,6 +193,19 @@ bool Connection::sendLongString(const char* str) {
 	return sendBytes((const uint8_t*)str, size);
 }
 
+void Connection::printCurrentPacket(int len) const {
+	char hexBuffer[sizeof(m_Packet) * 3];
+	for (size_t i = 0; i < static_cast<size_t>(len); i++) {
+		sprintf(hexBuffer + i * 3, "%02x ", m_Packet[i]);
+		if (i % 16 == 15) {
+			hexBuffer[i * 3 + 2] = '\n';
+		}
+	}
+	hexBuffer[len * 3 - 1] = '\0';
+
+	m_Logger.trace("UDP packet contents:\n%s", hexBuffer);
+}
+
 int Connection::getWriteError() { return m_UDP.getWriteError(); }
 
 // PACKET_HEARTBEAT 0
@@ -554,7 +567,7 @@ void Connection::searchForServer() {
 			m_UDP.remoteIP().toString().c_str(),
 			m_UDP.remotePort()
 		);
-		m_Logger.traceArray("UDP packet contents: ", m_Packet, len);
+		printCurrentPacket(len);
 #endif
 
 		// Handshake is different, it has 3 in the first byte, not the 4th, and data
@@ -575,7 +588,6 @@ void Connection::searchForServer() {
 			m_ServerFeatures = ServerFeatures{};
 
 			statusManager.setStatus(SlimeVR::Status::SERVER_CONNECTING, false);
-			ledManager.off();
 
 			m_Logger.debug(
 				"Handshake successful, server is %s:%d",
@@ -589,14 +601,10 @@ void Connection::searchForServer() {
 
 	auto now = millis();
 
-	// This makes the LED blink for 20ms every second
 	if (m_LastConnectionAttemptTimestamp + 1000 < now) {
 		m_LastConnectionAttemptTimestamp = now;
 		m_Logger.info("Searching for the server on the local network...");
 		Connection::sendTrackerDiscovery();
-		ledManager.on();
-	} else if (m_LastConnectionAttemptTimestamp + 20 < now) {
-		ledManager.off();
 	}
 }
 
@@ -673,7 +681,7 @@ void Connection::update() {
 		m_UDP.remoteIP().toString().c_str(),
 		m_UDP.remotePort()
 	);
-	m_Logger.traceArray("UDP packet contents: ", m_Packet, len);
+	printCurrentPacket(len);
 #else
 	(void)packetSize;
 #endif

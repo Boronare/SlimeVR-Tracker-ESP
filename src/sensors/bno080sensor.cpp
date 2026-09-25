@@ -259,7 +259,7 @@ void BNO080Sensor::motionLoop() {
 				onTableCalEnabled
 			);
 			m_Logger.info(
-				"BNO08X calibration satus received: Status: %d, Accel: %d, Gyro: %d, "
+				"BNO08X calibration status received: Status: %d, Accel: %d, Gyro: %d, "
 				"Mag: %d, Planar: %d, OnTable: %d",
 				calibrationResponseStatus,
 				accelCalEnabled,
@@ -306,7 +306,7 @@ void BNO080Sensor::motionLoop() {
 		}
 
 		m_Logger.error(
-			"Sensor %d doesn't respond. Last reset reason:",
+			"Sensor %d doesn't respond. Last reset reason: %d",
 			sensorId,
 			lastReset
 		);
@@ -371,7 +371,7 @@ void BNO080Sensor::sendTempIfNeeded() {
 	constexpr uint32_t sendInterval = 1.0f / maxSendRateHz * 1e6;
 	uint32_t elapsed = now - m_lastTemperaturePacketSent;
 	if (elapsed >= sendInterval) {
-		m_lastTemperaturePacketSent = now - (elapsed - sendInterval);
+		m_lastTemperaturePacketSent = now;
 		networkConnection.sendTemperature(sensorId, lastReadTemperature);
 	}
 }

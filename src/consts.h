@@ -51,24 +51,24 @@ enum class SensorTypeID : uint8_t {
 
 #define IMU_AUTO SensorAuto
 #define IMU_UNKNOWN ErroneousSensor
-// #define IMU_MPU9250 MPU9250Sensor
-// #define IMU_MPU6500 MPU6050Sensor
-// #define IMU_BNO080 BNO080Sensor
-// #define IMU_BNO085 BNO085Sensor
-// #define IMU_BNO055 BNO055Sensor
-// #define IMU_MPU6050 MPU6050Sensor
-// #define IMU_BNO086 BNO086Sensor
-// #define IMU_BMI160 BMI160Sensor
-// #define IMU_ICM20948 ICM20948Sensor
-// #define IMU_ICM42688 SoftFusionICM42688
-// #define IMU_BMI270 SoftFusionBMI270
-// #define IMU_LSM6DS3TRC SoftFusionLSM6DS3TRC
-// #define IMU_LSM6DSV SoftFusionLSM6DSV
-// #define IMU_LSM6DSO SoftFusionLSM6DSO
-#define IMU_LSM6DSR LSM6DSRSensor
-// #define IMU_MPU6050_SF SoftFusionMPU6050
-// #define IMU_ICM45686 SoftFusionICM45686
-// #define IMU_ICM45605 SoftFusionICM45605
+#define IMU_MPU9250 MPU9250Sensor
+#define IMU_MPU6500 MPU6050Sensor
+#define IMU_BNO080 BNO080Sensor
+#define IMU_BNO085 BNO085Sensor
+#define IMU_BNO055 BNO055Sensor
+#define IMU_MPU6050 MPU6050Sensor
+#define IMU_BNO086 BNO086Sensor
+#define IMU_BMI160 SoftFusionBMI160
+#define IMU_ICM20948 ICM20948Sensor
+#define IMU_ICM42688 SoftFusionICM42688
+#define IMU_BMI270 SoftFusionBMI270
+#define IMU_LSM6DS3TRC SoftFusionLSM6DS3TRC
+#define IMU_LSM6DSV SoftFusionLSM6DSV
+#define IMU_LSM6DSO SoftFusionLSM6DSO
+#define IMU_LSM6DSR SoftFusionLSM6DSR
+#define IMU_MPU6050_SF SoftFusionMPU6050
+#define IMU_ICM45686 SoftFusionICM45686
+#define IMU_ICM45605 SoftFusionICM45605
 
 #define IMU_DEV_RESERVED 250  // Reserved, should not be used in any release firmware
 
@@ -96,7 +96,42 @@ enum class SensorTypeID : uint8_t {
 #define BOARD_GESTURES 21  // Used by Gestures
 #define BOARD_SLIMEVR_V1_2 22  // SlimeVR v1.2
 #define BOARD_ESP32S3_SUPERMINI 23
+#define BOARD_GENERIC_NRF 24
+#define BOARD_SLIMEVR_BUTTERFLY_DEV 25
+#define BOARD_SLIMEVR_BUTTERFLY 26
+#define BOARD_ESP32C6_SUPERMINI 27
 #define BOARD_DEV_RESERVED 250  // Reserved, should not be used in any release firmware
+
+#define BOARD_N0 "BOARD_UNKNOWN"
+#define BOARD_N1 "BOARD_SLIMEVR_LEGACY"  // More ancient development version of SlimeVR
+#define BOARD_N2 "BOARD_SLIMEVR_DEV"  // Ancient development version of SlimeVR
+#define BOARD_N3 "BOARD_NODEMCU"
+#define BOARD_N4 "BOARD_CUSTOM"
+#define BOARD_N5 "BOARD_WROOM32"
+#define BOARD_N6 "BOARD_WEMOSD1MINI"
+#define BOARD_N7 "BOARD_TTGO_TBASE"
+#define BOARD_N8 "BOARD_ESP01"
+#define BOARD_N9 "BOARD_SLIMEVR"  // SlimeVR v1.0 & v1.1
+#define BOARD_N10 "BOARD_LOLIN_C3_MINI"
+#define BOARD_N11 "BOARD_BEETLE32C3"
+#define BOARD_N12 "BOARD_ESP32C3DEVKITM1"
+#define BOARD_N13 "BOARD_OWOTRACK"  // Only used by owoTrack mobile app
+#define BOARD_N14 "BOARD_WRANGLER"  // Only used by wrangler app
+#define BOARD_N15 "BOARD_MOCOPI"  // Used by mocopi/moslime
+#define BOARD_N16 "BOARD_WEMOSWROOM02"
+#define BOARD_N17 "BOARD_XIAO_ESP32C3"
+#define BOARD_N18 "BOARD_HARITORA"  // Used by Haritora/SlimeTora
+#define BOARD_N19 "BOARD_ESP32C6DEVKITC1"
+#define BOARD_N20 "BOARD_GLOVE_IMU_SLIMEVR_DEV"  // IMU Glove
+#define BOARD_N21 "BOARD_GESTURES"  // Used by Gestures
+#define BOARD_N22 "BOARD_SLIMEVR_V1_2"  // SlimeVR v1.2
+#define BOARD_N23 "BOARD_ESP32S3_SUPERMINI"
+#define BOARD_N24 "BOARD_GENERIC_NRF"
+#define BOARD_N25 "BOARD_SLIMEVR_BUTTERFLY_DEV"
+#define BOARD_N26 "BOARD_SLIMEVR_BUTTERFLY"
+#define BOARD_N27 "BOARD_ESP32C6_SUPERMINI"
+#define BOARD_N250 \
+	"BOARD_DEV_RESERVED"  // Reserved, should not be used in any release firmware
 
 #define BAT_EXTERNAL 1
 #define BAT_INTERNAL 2
@@ -152,6 +187,8 @@ enum class SensorTypeID : uint8_t {
 #define MCU_ESP32_C3 6
 #define MCU_MOCOPI 7  // Used by mocopi/moslime
 #define MCU_HARITORA 8  // Used by Haritora/SlimeTora
+#define MCU_NRF52 9
+#define MCU_NRF54L 10
 #define MCU_DEV_RESERVED 250  // Reserved, should not be used in any release firmware
 
 enum class SensorDataType : uint8_t {

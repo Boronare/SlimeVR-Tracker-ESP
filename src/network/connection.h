@@ -198,6 +198,8 @@ private:
 		return endPacket();
 	}
 
+	void printCurrentPacket(int len) const;
+
 	int getWriteError();
 
 	void returnLastPacket(int len);

@@ -1,14 +1,17 @@
 /*
 	SlimeVR Code is placed under the MIT license
-	Copyright (c) 2025 Gorbit99 & SlimeVR Contributors
+	Copyright (c) 2026 Gorbit99 & SlimeVR Contributors
+
 	Permission is hereby granted, free of charge, to any person obtaining a copy
 	of this software and associated documentation files (the "Software"), to deal
 	in the Software without restriction, including without limitation the rights
 	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 	copies of the Software, and to permit persons to whom the Software is
 	furnished to do so, subject to the following conditions:
+
 	The above copyright notice and this permission notice shall be included in
 	all copies or substantial portions of the Software.
+
 	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -20,39 +23,35 @@
 
 #pragma once
 
-#include <cstdint>
+#include <Arduino.h>
 
-#include "logging/Logger.h"
+#include <cmath>
+#include <vector>
 
-namespace SlimeVR::Debugging {
+namespace SlimeVR::Logging {
 
-/*
- * Usage:
- *
- * TimeTakenMeasurer measurer{"Some event"};
- *
- * ...
- *
- * measurer.before();
- * thing to measure
- * measurer.after();
- */
-class TimeTakenMeasurer {
+class SerialBuffer {
 public:
-	explicit TimeTakenMeasurer(const char* name);
-	void before();
-	void after();
+	void printf(const char* fmt, ...) __attribute__((format(printf, 2, 3)));
+	void tick();
+	void enableImmediateMode(bool enable = true);
+
+	static SerialBuffer& getInstance();
 
 private:
-	static constexpr float SecondsBetweenReports = 1.0f;
+	SerialBuffer();
+	static constexpr size_t BufferSize = 8192;
+	static constexpr size_t PerTickWriteSize = 128;
+	std::vector<char> buffer;
+	char printfBuffer[512 + 1];
+	size_t head = 0;
+	size_t tail = 0;
+	size_t count = 0;
+	bool immediateMode = false;
 
-	const char* name;
-	SlimeVR::Logging::Logger m_Logger = SlimeVR::Logging::Logger("TimeTaken");
+	static SerialBuffer instance;
 
-	uint64_t lastTimeTakenReportMillis = 0;
-	uint64_t timeTakenMicros = 0;
-
-	uint64_t startMicros = 0;
+	static_assert(sizeof(printfBuffer) < BufferSize);
 };
 
-}  // namespace SlimeVR::Debugging
+}  // namespace SlimeVR::Logging

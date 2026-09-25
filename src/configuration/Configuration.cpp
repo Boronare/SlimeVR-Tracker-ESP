@@ -29,19 +29,39 @@
 #include <cstring>
 
 #include "../FSHelper.h"
+#include "GlobalVars.h"
 #include "consts.h"
 #include "sensors/SensorToggles.h"
 #include "utils.h"
+
+#ifdef ESP32
+#include "nvs_flash.h"
+#endif
 
 #define DIR_CALIBRATIONS "/calibrations"
 #define DIR_TEMPERATURE_CALIBRATIONS "/tempcalibrations"
 #define DIR_TOGGLES_OLD "/toggles"
 #define DIR_TOGGLES "/sensortoggles"
 
+extern bool initFullreset;
+
 namespace SlimeVR::Configuration {
 void Configuration::setup() {
 	if (m_Loaded) {
 		return;
+	}
+
+	if (initFullreset) {
+		this->m_Logger.info(
+			PSTR("Request for Factory reset from Recovery Mode received.")
+		);
+		if (LittleFS.begin()) {
+			this->factoryReset();
+		} else {
+			this->m_Logger.error(PSTR("Could not mount LittleFS try to format it"));
+			LittleFS.format();
+			this->factoryReset();
+		}
 	}
 
 	bool status = LittleFS.begin();
@@ -104,6 +124,33 @@ void Configuration::setup() {
 
 #ifdef DEBUG_CONFIGURATION
 	print();
+#endif
+}
+
+void Configuration::factoryReset() {
+	this->reset();
+	this->wifiReset();
+	this->m_Logger.info("Rebooting...");
+	delay(3000);
+	ESP.restart();
+}
+
+void Configuration::wifiReset() {
+	WiFi.disconnect(true);  // Clear WiFi credentials
+#if ESP8266
+	ESP.eraseConfig();  // Clear ESP config
+#elif defined(ESP32)
+	nvs_flash_erase();
+#else
+#warning SERIAL COMMAND FACTORY RESET NOT SUPPORTED
+	this->m_Logger.info(PSTR("FACTORY RESET NOT SUPPORTED"));
+	return;
+#endif
+#if defined(WIFI_CREDS_SSID) && defined(WIFI_CREDS_PASSWD)
+#warning FACTORY RESET does not clear your hardcoded WiFi credentials!
+	this->m_Logger.warn(
+		PSTR("FACTORY RESET does not clear your hardcoded WiFi credentials!")
+	);
 #endif
 }
 
@@ -229,10 +276,41 @@ void Configuration::eraseSensors() {
 
 void Configuration::loadSensors() {
 	SlimeVR::Utils::forEachFile(DIR_CALIBRATIONS, [&](SlimeVR::Utils::File f) {
-		SensorConfig sensorConfig;
-		f.read((uint8_t*)&sensorConfig, sizeof(SensorConfig));
-
 		uint8_t sensorId = strtoul(f.name(), nullptr, 10);
+
+		if (f.size() != sizeof(SensorConfig)) {
+			m_Logger.warn(
+				"Skipping incompatible sensor calibration file index %d (size=%u "
+				"expected=%u)",
+				sensorId,
+				static_cast<unsigned>(f.size()),
+				static_cast<unsigned>(sizeof(SensorConfig))
+			);
+			return;
+		}
+
+		SensorConfig sensorConfig{};
+		auto bytesRead = f.read((uint8_t*)&sensorConfig, sizeof(SensorConfig));
+		if (bytesRead != sizeof(SensorConfig)) {
+			m_Logger.warn(
+				"Skipping unreadable sensor calibration file index %d (read=%u "
+				"expected=%u)",
+				sensorId,
+				static_cast<unsigned>(bytesRead),
+				static_cast<unsigned>(sizeof(SensorConfig))
+			);
+			return;
+		}
+
+		if (sensorConfig.type > SensorConfigType::RUNTIME_CALIBRATION) {
+			m_Logger.warn(
+				"Skipping sensor calibration file index %d with invalid type=%d",
+				sensorId,
+				static_cast<int>(sensorConfig.type)
+			);
+			return;
+		}
+
 		m_Logger.debug(
 			"Found sensor calibration for %s at index %d",
 			calibrationConfigTypeToString(sensorConfig.type),
@@ -483,38 +561,7 @@ void Configuration::print() {
 				m_Logger.info("            magEnabled: %d", c.data.bno0XX.magEnabled);
 
 				break;
-			case SensorConfigType::LSM6DSR:
-				m_Logger.info(
-					"            A_B   : %f, %f, %f",
-					UNPACK_VECTOR_ARRAY(c.data.lsm6dsr.A_B)
-				);
-
-				m_Logger.info("            A_Ainv:");
-				for (uint8_t i = 0; i < 3; i++) {
-					m_Logger.info(
-						"                    %f, %f, %f",
-						UNPACK_VECTOR_ARRAY(c.data.lsm6dsr.A_Ainv[i])
-					);
-				}
-
-				m_Logger.info(
-					"            M_B   : %f, %f, %f",
-					UNPACK_VECTOR_ARRAY(c.data.lsm6dsr.M_B)
-				);
-
-				m_Logger.info("            M_Ainv:");
-				for (uint8_t i = 0; i < 3; i++) {
-					m_Logger.info(
-						"                    %f, %f, %f",
-						UNPACK_VECTOR_ARRAY(c.data.lsm6dsr.M_Ainv[i])
-					);
-				}
-
-				m_Logger.info(
-					"            G_off  : %f, %f, %f",
-					UNPACK_VECTOR_ARRAY(c.data.lsm6dsr.G_off)
-				);
-				m_Logger.info("			flags: %02x", c.data.lsm6dsr.flags);
+			default:
 				break;
 		}
 	}

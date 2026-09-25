@@ -40,8 +40,6 @@ const char* calibrationConfigTypeToString(SensorConfigType type) {
 			return "SoftFusion (common)";
 		case SensorConfigType::BNO0XX:
 			return "BNO0XX";
-		case SensorConfigType::LSM6DSR:
-			return "LSM6DSR";
 		case SensorConfigType::RUNTIME_CALIBRATION:
 			return "SoftFusion (runtime calibration)";
 		default:
