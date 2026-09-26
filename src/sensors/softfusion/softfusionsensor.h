@@ -167,6 +167,9 @@ class SoftFusionSensor : public Sensor {
 	}
 
 	void processMagSample(const RawSensorT xyz[3], const sensor_real_t timeDelta) {
+#if MAG_REQUIRED
+		magCheckFeed(xyz);  // before the toggle: the check polls even when it is off
+#endif
 		if (!toggles.getToggle(SensorToggles::MagEnabled)) {
 			return;
 		}
@@ -237,6 +240,9 @@ public:
 
 	void motionLoop() final {
 		calibrator.tick();
+#if MAG_REQUIRED
+		magCheckTick();
+#endif
 
 		// read fifo updating fusion
 		uint32_t now = micros();
@@ -411,6 +417,24 @@ public:
 				magDriver.startPolling();
 				calibrator.onMagEnabled();
 			}
+#if MAG_REQUIRED
+			// The board carries a mag; not finding it is a hardware fault.
+			// Found, it still has to deliver live data: checked over the first
+			// seconds (magCheckTick), polling even if the mag toggle is off, and
+			// before the first-boot gyro calibration.
+			holdFirstGyroCal(true);
+			if (!magAttached) {
+				m_Logger.error("Magnetometer required but not found");
+				statusManager.setStatus(SlimeVR::Status::MAG_FAULT, true);
+			} else {
+				magCheckStartMillis = millis();
+				magCheckRunning = true;
+				if (!toggles.getToggle(SensorToggles::MagEnabled)) {
+					magDriver.startPolling();
+					magCheckOwnsPolling = true;
+				}
+			}
+#endif
 		}
 
 		toggles.onToggleChange([&](SensorToggles toggle, bool value) {
@@ -456,6 +480,97 @@ public:
 
 	SoftFusion::MagDriver magDriver;
 	bool magAttached = false;
+
+#if MAG_REQUIRED
+	// Mag health check, every boot (production test on the first one).  Two
+	// faults seen in the field besides a missing chip: no samples at all, and
+	// a chip that answers but repeats the same reading forever.  A live sensor
+	// at rest still moves by a few LSB of noise on every axis.
+	static constexpr uint32_t magCheckMillis = 4000;  // ~100 samples at 26 Hz
+	static constexpr float magCheckMinFraction = 0.5f;  // of the nominal rate
+	bool magCheckRunning = false;
+	bool magCheckOwnsPolling = false;
+	uint32_t magCheckStartMillis = 0;
+	uint32_t magCheckSamples = 0;
+	RawSensorT magCheckMin[3]{0, 0, 0};
+	RawSensorT magCheckMax[3]{0, 0, 0};
+
+	// The first-boot gyro calibration waits for the check and never runs after
+	// a failure: nothing is stored, so the next boot tests again.
+	void holdFirstGyroCal(bool hold) {
+		if constexpr (requires(Calib& c) { c.holdFirstGyroCal(true); }) {
+			calibrator.holdFirstGyroCal(hold);
+		}
+	}
+
+	void magCheckFeed(const RawSensorT xyz[3]) {
+		if (!magCheckRunning) {
+			return;
+		}
+		for (uint8_t i = 0; i < 3; i++) {
+			if (magCheckSamples == 0 || xyz[i] < magCheckMin[i]) {
+				magCheckMin[i] = xyz[i];
+			}
+			if (magCheckSamples == 0 || xyz[i] > magCheckMax[i]) {
+				magCheckMax[i] = xyz[i];
+			}
+		}
+		magCheckSamples++;
+	}
+
+	void magCheckTick() {
+		if (!magCheckRunning || millis() - magCheckStartMillis < magCheckMillis) {
+			return;
+		}
+		magCheckRunning = false;
+
+		const auto expected = static_cast<uint32_t>(
+			(magCheckMillis / 1000.0f) / calibrator.getMagTimestep()
+			* magCheckMinFraction
+		);
+		const bool stuck = magCheckSamples > 0 && magCheckMin[0] == magCheckMax[0]
+						&& magCheckMin[1] == magCheckMax[1]
+						&& magCheckMin[2] == magCheckMax[2];
+		const bool silent = magCheckSamples < expected;
+
+		if (silent) {
+			m_Logger.error(
+				"Magnetometer fault: %u samples in %u ms (expected >= %u)",
+				static_cast<unsigned>(magCheckSamples),
+				static_cast<unsigned>(magCheckMillis),
+				static_cast<unsigned>(expected)
+			);
+		} else if (stuck) {
+			m_Logger.error(
+				"Magnetometer fault: the same reading %d %d %d in all %u samples",
+				magCheckMin[0],
+				magCheckMin[1],
+				magCheckMin[2],
+				static_cast<unsigned>(magCheckSamples)
+			);
+		} else {
+			m_Logger.info(
+				"Magnetometer check passed: %u samples, spread %d %d %d LSB",
+				static_cast<unsigned>(magCheckSamples),
+				magCheckMax[0] - magCheckMin[0],
+				magCheckMax[1] - magCheckMin[1],
+				magCheckMax[2] - magCheckMin[2]
+			);
+		}
+		if (silent || stuck) {
+			statusManager.setStatus(SlimeVR::Status::MAG_FAULT, true);
+		} else {
+			holdFirstGyroCal(false);  // passed: the first gyro calibration may run
+		}
+
+		// Hand the polling back to the toggle.
+		if (magCheckOwnsPolling && !toggles.getToggle(SensorToggles::MagEnabled)
+			&& !m_hasPendingMagToggle) {
+			magDriver.stopPolling();
+		}
+		magCheckOwnsPolling = false;
+	}
+#endif
 
 	static bool checkPresent(const RegisterInterface& imuInterface) {
 		I2Cdev::readTimeout = 100;

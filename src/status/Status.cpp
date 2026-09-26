@@ -15,6 +15,8 @@ const char* statusToString(Status status) {
 			return "SERVER_CONNECTING";
 		case MAG_CALIBRATING:
 			return "MAG_CALIBRATING";
+		case MAG_FAULT:
+			return "MAG_FAULT";
 		default:
 			return "UNKNOWN";
 	}

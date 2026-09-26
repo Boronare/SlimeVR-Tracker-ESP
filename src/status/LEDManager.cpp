@@ -103,6 +103,21 @@ void LEDManager::update() {
 				length = IMU_ERROR_INTERVAL;
 				break;
 		}
+	} else if (statusManager.hasStatus(Status::MAG_FAULT)) {
+		// Steady fast blink, no pause: the board's mag is missing or dead.
+		count = MAG_FAULT_COUNT;
+		switch (m_CurrentStage) {
+			case ON:
+			case OFF:
+				length = MAG_FAULT_LENGTH;
+				break;
+			case GAP:
+				length = MAG_FAULT_LENGTH;
+				break;
+			case INTERVAL:
+				length = MAG_FAULT_INTERVAL;
+				break;
+		}
 	} else if (statusManager.hasStatus(Status::MAG_CALIBRATING)) {
 		count = MAG_CALIBRATING_COUNT;
 		switch (m_CurrentStage) {

@@ -38,6 +38,12 @@
 #include "NullCalibrationStep.h"
 #include "SampleRateCalibrationStep.h"
 #include "configuration/SensorConfig.h"
+
+// 1: with no gyro offset stored, take one a few seconds after power-on without
+// waiting for rest detection (see begin()).
+#ifndef FIRST_BOOT_GYRO_CAL
+#define FIRST_BOOT_GYRO_CAL 0
+#endif
 #include "logging/Logger.h"
 #include "sensors/SensorFusion.h"
 #include "sensors/softfusion/CalibrationBase.h"
@@ -132,12 +138,30 @@ public:
 		syncMagCalibrationToActive();
 
 		printCalibration();
+
+		// No gyro offset stored: take one a few seconds after power-on instead of
+		// waiting for VQF's rest detection, which looks at the uncorrected gyro
+		// and may never see rest while the offset exceeds restThGyr.
+		if (FIRST_BOOT_GYRO_CAL && calibration.gyroPointsCalibrated == 0) {
+			firstGyroCal = true;
+			currentStep = &gyroBiasCalibrationStep;
+			nextCalibrationStep = CalibrationStepEnum::GYRO_BIAS;
+			logger.info(
+				"No gyro calibration: calibrating in %.0f s, keep the tracker still",
+				firstGyroCalDelaySeconds
+			);
+		}
 	}
 
 	void tick() final {
 		maybeStartMagCalibration();
 		if (!isMagCalibrationReady()) {
 			fusion.setMagFusionEnabled(false);
+		}
+
+		if (firstGyroCal) {
+			tickFirstGyroCal();
+			return;
 		}
 
 		if (skippedAStep && !lastTickRest && fusion.getRestDetected()) {
@@ -251,6 +275,13 @@ public:
 	}
 
 	void provideGyroSample(const RawSensorT gyroSample[3]) final {
+		if (isCalibrating && firstGyroCal && firstGyroMoved(gyroSample)) {
+			logger.warn("Moved during gyro calibration, starting over");
+			currentStep->cancel();
+			currentStep->start();
+			firstGyroHaveSample = false;
+			return;
+		}
 		if (isCalibrating) {
 			currentStep->processGyroSample(gyroSample);
 		}
@@ -271,6 +302,8 @@ public:
 	void onMagEnabled() final {
 		pendingMagCalibrationRequest = shouldRequestMagCalibration();
 	}
+
+	void holdFirstGyroCal(bool hold) { firstGyroCalHeld = hold; }
 
 	bool shouldUpdateMagFusion() const {
 		if (isCalibrating && currentStep == &magCalibrationStep) {
@@ -355,6 +388,64 @@ private:
 	static constexpr float maxValidMagReferenceNorm = 100000.0f;
 	static constexpr float magNormRejectRelativeThreshold = 0.07f;
 	static constexpr float magNormRejectAbsoluteThreshold = 20.0f;
+
+	void tickFirstGyroCal() {
+		if (firstGyroCalHeld
+			|| millis() - startupMillis < firstGyroCalDelaySeconds * 1e3) {
+			return;
+		}
+		if (!isCalibrating) {
+			isCalibrating = true;
+			firstGyroHaveSample = false;
+			currentStep->start();
+		}
+		if (currentStep->tick() != CalibrationStep<RawSensorT>::TickResult::DONE) {
+			return;
+		}
+
+		// Use it now rather than from the next boot, and restart the filter so
+		// the offset it ran with until here does not linger in its state.
+		for (uint8_t i = 0; i < 3; i++) {
+			activeCalibration.G_off1[i] = calibration.G_off1[i];
+		}
+		activeCalibration.gyroPointsCalibrated = calibration.gyroPointsCalibrated;
+		activeCalibration.gyroMeasurementTemperature1
+			= calibration.gyroMeasurementTemperature1;
+		Base::recalcFusion();
+
+		currentStep->cancel();
+		isCalibrating = false;
+		firstGyroCal = false;
+		saveCalibration();
+		printCalibration(CalibrationPrintFlags::GYRO_BIAS);
+
+		// Then the usual sequence, sampling rate first.
+		currentStep = &sampleRateCalibrationStep;
+		nextCalibrationStep = CalibrationStepEnum::SAMPLING_RATE;
+		currentStep->start();
+	}
+
+	// Peak-to-peak on any axis beyond firstGyroCalMaxSpreadDps means the tracker
+	// is being handled.
+	bool firstGyroMoved(const RawSensorT sample[3]) {
+		if (!firstGyroHaveSample) {
+			for (uint8_t i = 0; i < 3; i++) {
+				firstGyroMin[i] = firstGyroMax[i] = sample[i];
+			}
+			firstGyroHaveSample = true;
+			return false;
+		}
+		constexpr float maxSpreadRaw
+			= firstGyroCalMaxSpreadDps * (PI / 180.0f) / Consts::GScale;
+		for (uint8_t i = 0; i < 3; i++) {
+			firstGyroMin[i] = std::min<int32_t>(firstGyroMin[i], sample[i]);
+			firstGyroMax[i] = std::max<int32_t>(firstGyroMax[i], sample[i]);
+			if (firstGyroMax[i] - firstGyroMin[i] > maxSpreadRaw) {
+				return true;
+			}
+		}
+		return false;
+	}
 
 	void computeNextCalibrationStep() {
 		if (!calibration.motionlessCalibrated && Base::HasMotionlessCalib) {
@@ -443,6 +534,10 @@ private:
 	void maybeStartMagCalibration() {
 		if (!pendingMagCalibrationRequest) {
 			return;
+		}
+
+		if (firstGyroCal) {
+			return;  // the gyro offset comes first; the request waits
 		}
 
 		if (magCalibrationAttemptedSinceBoot) {
@@ -688,6 +783,13 @@ private:
 	CalibrationStepEnum nextCalibrationStep = CalibrationStepEnum::SAMPLING_RATE;
 
 	static constexpr float initialStartupDelaySeconds = 5;
+	static constexpr float firstGyroCalDelaySeconds = 3;
+	static constexpr float firstGyroCalMaxSpreadDps = 5.0f;
+	bool firstGyroCal = false;
+	bool firstGyroCalHeld = false;  // e.g. until a production test passes
+	bool firstGyroHaveSample = false;
+	int32_t firstGyroMin[3]{0, 0, 0};
+	int32_t firstGyroMax[3]{0, 0, 0};
 	uint64_t startupMillis = millis();
 
 	SampleRateCalibrationStep<RawSensorT> sampleRateCalibrationStep{activeCalibration};

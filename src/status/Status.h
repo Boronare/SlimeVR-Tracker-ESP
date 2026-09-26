@@ -8,7 +8,8 @@ enum Status {
 	IMU_ERROR = 1 << 2,
 	WIFI_CONNECTING = 1 << 3,
 	SERVER_CONNECTING = 1 << 4,
-	MAG_CALIBRATING = 1 << 5
+	MAG_CALIBRATING = 1 << 5,
+	MAG_FAULT = 1 << 6
 };
 
 const char* statusToString(Status status);
