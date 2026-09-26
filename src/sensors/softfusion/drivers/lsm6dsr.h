@@ -35,6 +35,17 @@ namespace SlimeVR::Sensors::SoftFusion::Drivers {
 // and gyroscope range at 1000dps
 // Gyroscope ODR = 208Hz, accel ODR = 104Hz
 
+// Gyro full scale, dps: 1000 (upstream default) or 2000.  At 1000 a fast limb
+// swing clips (32767 x 35 mdps = 1146.8 dps) and the clipped rotation is lost
+// from the heading; 2000 halves the resolution (70 mdps/LSB).
+#ifndef LSM6DSR_GYRO_FS_DPS
+#define LSM6DSR_GYRO_FS_DPS 1000
+#endif
+static_assert(
+	LSM6DSR_GYRO_FS_DPS == 1000 || LSM6DSR_GYRO_FS_DPS == 2000,
+	"LSM6DSR_GYRO_FS_DPS must be 1000 or 2000"
+);
+
 struct LSM6DSR : LSM6DSOutputHandler {
 
 	enum class AuxHubOdr : uint8_t {
@@ -58,7 +69,9 @@ struct LSM6DSR : LSM6DSOutputHandler {
 	static constexpr float MagTs = 1.0 / MagFreq;
 	static constexpr float TempTs = 1.0 / TempFreq;
 
-	static constexpr float GyroSensitivity = 1000 / 35.0f;
+	// LSB per dps: 35 mdps/LSB at 1000 dps, 70 at 2000
+	static constexpr float GyroSensitivity
+		= 1000 / (LSM6DSR_GYRO_FS_DPS == 2000 ? 70.0f : 35.0f);
 	static constexpr float AccelSensitivity = 1000 / 0.122f;
 
 	static constexpr float TemperatureBias = 25.0f;
@@ -79,7 +92,9 @@ struct LSM6DSR : LSM6DSOutputHandler {
 		};
 		struct Ctrl2GY {
 			static constexpr uint8_t reg = 0x11;
-			static constexpr uint8_t value = (0b01011000);  // GY at 208 Hz, 1000dps FS
+			// GY at 208 Hz; FS_G bits 3:2 = 10 (1000 dps) or 11 (2000 dps)
+			static constexpr uint8_t value
+				= LSM6DSR_GYRO_FS_DPS == 2000 ? 0b01011100 : 0b01011000;
 		};
 		struct Ctrl3C {
 			static constexpr uint8_t reg = 0x12;
