@@ -90,6 +90,8 @@ private:
 	unsigned long m_Timer = 0;
 	LEDStage m_CurrentStage = OFF;
 	unsigned long m_LastUpdate = millis();
+	unsigned long m_SignalStart = 0;  // calibration confirm / signal shown since
+	bool m_SignalConfirm = false;  // which of the two is showing
 
 	uint8_t m_Pin = LED_PIN;
 	bool m_Enabled = m_Pin >= 0 && m_Pin < LED_OFF;

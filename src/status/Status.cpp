@@ -17,6 +17,12 @@ const char* statusToString(Status status) {
 			return "MAG_CALIBRATING";
 		case MAG_FAULT:
 			return "MAG_FAULT";
+		case CALIBRATION_SIGNAL:
+			return "CALIBRATION_SIGNAL";
+		case CALIBRATING:
+			return "CALIBRATING";
+		case CALIBRATION_CONFIRM:
+			return "CALIBRATION_CONFIRM";
 		default:
 			return "UNKNOWN";
 	}

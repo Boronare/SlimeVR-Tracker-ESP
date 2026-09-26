@@ -44,6 +44,15 @@
 #ifndef FIRST_BOOT_GYRO_CAL
 #define FIRST_BOOT_GYRO_CAL 0
 #endif
+
+// 1: powered on upside down (face down), the LED blinks slowly five times in
+// 5 s; turned face up meanwhile, the gyro offset is taken again, as on the
+// factory boot -- a recalibration without a serial console (left face down, the
+// boot goes on normally).  Then as on the factory boot: three quick blinks
+// (start), steadily on while it runs, three quick blinks (done).  Keep it still.
+#ifndef UPSIDE_DOWN_RECAL
+#define UPSIDE_DOWN_RECAL 0
+#endif
 #include "logging/Logger.h"
 #include "sensors/SensorFusion.h"
 #include "sensors/softfusion/CalibrationBase.h"
@@ -142,6 +151,7 @@ public:
 		// No gyro offset stored: take one a few seconds after power-on instead of
 		// waiting for VQF's rest detection, which looks at the uncorrected gyro
 		// and may never see rest while the offset exceeds restThGyr.
+		firstGyroCalNotBefore = startupMillis + firstGyroCalDelaySeconds * 1000;
 		if (FIRST_BOOT_GYRO_CAL && calibration.gyroPointsCalibrated == 0) {
 			firstGyroCal = true;
 			currentStep = &gyroBiasCalibrationStep;
@@ -158,6 +168,17 @@ public:
 		if (!isMagCalibrationReady()) {
 			fusion.setMagFusionEnabled(false);
 		}
+
+		if (calLed == CalLed::End && millis() - calLedSince >= calSignalMillis) {
+			statusManager.setStatus(SlimeVR::Status::CALIBRATION_SIGNAL, false);
+			calLed = CalLed::Idle;
+		}
+
+#if UPSIDE_DOWN_RECAL
+		if (gesture != Gesture::Done && tickGesture()) {
+			return;
+		}
+#endif
 
 		if (firstGyroCal) {
 			tickFirstGyroCal();
@@ -269,6 +290,12 @@ public:
 	}
 
 	void provideAccelSample(const RawSensorT accelSample[3]) final {
+#if UPSIDE_DOWN_RECAL
+		if (gesture == Gesture::Detect || gesture == Gesture::Confirm) {
+			gestureAccZ += accelSample[2];
+			gestureAccN++;
+		}
+#endif
 		if (isCalibrating) {
 			currentStep->processAccelSample(accelSample);
 		}
@@ -391,10 +418,89 @@ private:
 	static constexpr float magNormRejectRelativeThreshold = 0.07f;
 	static constexpr float magNormRejectAbsoluteThreshold = 20.0f;
 
+#if UPSIDE_DOWN_RECAL
+	// Mean accelerometer Z since the accumulators were last cleared, m/s^2.
+	float gestureMeanZ() const {
+		return gestureAccN ? static_cast<float>(gestureAccZ) / gestureAccN * Consts::AScale
+						   : 0.0f;
+	}
+
+	// True while the gesture holds the calibration sequence back.
+	bool tickGesture() {
+		if (gesture == Gesture::Detect) {
+			if (millis() - startupMillis < gestureDetectMillis) {
+				return true;
+			}
+			const float z = gestureMeanZ();
+			if (gestureAccN == 0 || z > -7.5f) {
+				gesture = Gesture::Done;
+				return false;
+			}
+			// Confirm: turn it face up during the five slow blinks (as the
+			// upstream "flip front" gesture).
+			logger.info(
+				"Powered on upside down (%.1f m/s^2): turn it face up within 5 s to calibrate", z
+			);
+			statusManager.setStatus(SlimeVR::Status::CALIBRATION_CONFIRM, true);
+			gestureSince = millis();
+			gestureAccZ = 0;
+			gestureAccN = 0;
+			gesture = Gesture::Confirm;
+			return true;
+		}
+		// Confirm: judged on the last second only
+		const uint32_t elapsed = millis() - gestureSince;
+		if (elapsed < gestureConfirmMillis - 1000 && gestureAccN) {
+			gestureAccZ = 0;
+			gestureAccN = 0;
+		}
+		if (elapsed < gestureConfirmMillis) {
+			return true;
+		}
+		statusManager.setStatus(SlimeVR::Status::CALIBRATION_CONFIRM, false);
+		gesture = Gesture::Done;
+		const float z = gestureMeanZ();
+		if (gestureAccN == 0 || z < 7.5f) {
+			logger.info("Not turned face up (%.1f m/s^2): no calibration", z);
+			return false;
+		}
+		logger.info("Turned face up: gyro calibration");
+
+		// The factory-boot calibration, from now: a fresh single-point offset.
+		calibration.gyroPointsCalibrated = 0;
+		firstGyroCal = true;
+		firstGyroCalNotBefore = millis();
+		if (isCalibrating) {
+			currentStep->cancel();
+			isCalibrating = false;
+		}
+		currentStep = &gyroBiasCalibrationStep;
+		nextCalibrationStep = CalibrationStepEnum::GYRO_BIAS;
+		return false;
+	}
+#endif
+
 	void tickFirstGyroCal() {
-		if (firstGyroCalHeld
-			|| millis() - startupMillis < firstGyroCalDelaySeconds * 1e3) {
+		if (firstGyroCalHeld || static_cast<int32_t>(millis() - firstGyroCalNotBefore) < 0) {
 			return;
+		}
+		// LED: three quick blinks (start), on while it runs, three quick blinks
+		// (done, in tickCalLed).  The calibration itself waits for the start
+		// signal to finish.
+		if (calLed == CalLed::Idle) {
+			statusManager.setStatus(SlimeVR::Status::CALIBRATION_SIGNAL, true);
+			calLedSince = millis();
+			calLed = CalLed::Start;
+			logger.info("Gyro calibration: keep the tracker still");
+			return;
+		}
+		if (calLed == CalLed::Start) {
+			if (millis() - calLedSince < calSignalMillis) {
+				return;
+			}
+			statusManager.setStatus(SlimeVR::Status::CALIBRATION_SIGNAL, false);
+			statusManager.setStatus(SlimeVR::Status::CALIBRATING, true);
+			calLed = CalLed::Running;
 		}
 		if (!isCalibrating) {
 			isCalibrating = true;
@@ -420,6 +526,11 @@ private:
 		firstGyroCal = false;
 		saveCalibration();
 		printCalibration(CalibrationPrintFlags::GYRO_BIAS);
+
+		statusManager.setStatus(SlimeVR::Status::CALIBRATING, false);
+		statusManager.setStatus(SlimeVR::Status::CALIBRATION_SIGNAL, true);
+		calLedSince = millis();
+		calLed = CalLed::End;
 
 		// Then the usual sequence, sampling rate first.
 		currentStep = &sampleRateCalibrationStep;
@@ -789,6 +900,21 @@ private:
 	static constexpr float firstGyroCalMaxSpreadDps = 5.0f;
 	bool firstGyroCal = false;
 	bool firstGyroCalHeld = false;  // e.g. until a production test passes
+	uint32_t firstGyroCalNotBefore = 0;
+#if UPSIDE_DOWN_RECAL
+	enum class Gesture { Detect, Confirm, Done };
+	Gesture gesture = Gesture::Detect;
+	static constexpr uint32_t gestureDetectMillis = 1000;  // accel averaged over
+	static constexpr uint32_t gestureConfirmMillis = 5000;  // five slow blinks
+	uint32_t gestureSince = 0;
+	int32_t gestureAccZ = 0;
+	uint32_t gestureAccN = 0;
+#endif
+	// LED around the first-boot / gesture calibration
+	enum class CalLed { Idle, Start, Running, End };
+	CalLed calLed = CalLed::Idle;
+	uint32_t calLedSince = 0;
+	static constexpr uint32_t calSignalMillis = 500;  // three quick blinks
 	bool firstGyroHaveSample = false;
 	int32_t firstGyroMin[3]{0, 0, 0};
 	int32_t firstGyroMax[3]{0, 0, 0};

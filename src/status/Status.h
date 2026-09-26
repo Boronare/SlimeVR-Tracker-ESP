@@ -9,7 +9,10 @@ enum Status {
 	WIFI_CONNECTING = 1 << 3,
 	SERVER_CONNECTING = 1 << 4,
 	MAG_CALIBRATING = 1 << 5,
-	MAG_FAULT = 1 << 6
+	MAG_FAULT = 1 << 6,
+	CALIBRATION_SIGNAL = 1 << 7,  // three quick blinks: a calibration starts / ends
+	CALIBRATING = 1 << 8,  // LED steadily on while it runs
+	CALIBRATION_CONFIRM = 1 << 9  // one blink a second: keep it so to calibrate
 };
 
 const char* statusToString(Status status);

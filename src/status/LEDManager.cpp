@@ -72,6 +72,32 @@ void LEDManager::update() {
 
 	m_LastUpdate = time;
 
+	// Calibration confirm (hold the gesture): one blink a second for five
+	// seconds.  Start/end: three blinks in half a second.  Ahead of everything
+	// else; the calibrator sets and clears them.
+	// While the calibration runs the LED stays on.
+	const bool confirm = statusManager.hasStatus(Status::CALIBRATION_CONFIRM);
+	if (confirm || statusManager.hasStatus(Status::CALIBRATION_SIGNAL)) {
+		// A fresh start whenever the pattern changes, so no blink is cut short.
+		if (m_SignalStart == 0 || m_SignalConfirm != confirm) {
+			m_SignalStart = time;
+			m_SignalConfirm = confirm;
+		}
+		// confirm: one blink a second (0.5 s on); signal: three in half a second
+		const unsigned long period = confirm ? 1000 : 167;
+		if ((time - m_SignalStart) % period < period / 2) {
+			on();
+		} else {
+			off();
+		}
+		return;
+	}
+	m_SignalStart = 0;
+	if (statusManager.hasStatus(Status::CALIBRATING)) {
+		on();
+		return;
+	}
+
 	unsigned int length = 0;
 	unsigned int count = 0;
 
