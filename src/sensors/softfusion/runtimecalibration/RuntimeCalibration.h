@@ -304,6 +304,8 @@ public:
 	}
 
 	void holdFirstGyroCal(bool hold) { firstGyroCalHeld = hold; }
+	// True from begin() until the factory-boot gyro calibration is done.
+	[[nodiscard]] bool firstGyroCalPending() const { return firstGyroCal; }
 
 	bool shouldUpdateMagFusion() const {
 		if (isCalibrating && currentStep == &magCalibrationStep) {

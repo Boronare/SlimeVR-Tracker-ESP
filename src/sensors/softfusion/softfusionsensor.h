@@ -167,6 +167,13 @@ class SoftFusionSensor : public Sensor {
 	}
 
 	void processMagSample(const RawSensorT xyz[3], const sensor_real_t timeDelta) {
+		// The first sample after polling starts is stale: on the LSM6DSR sensor
+		// hub it carried the WHO_AM_I byte read during detection (10 00 00 00 00
+		// 00, decoded to a full-scale reading).  Drop the first two.
+		if (m_magSkip > 0) {
+			m_magSkip--;
+			return;
+		}
 #if MAG_REQUIRED
 		magCheckFeed(xyz);  // before the toggle: the check polls even when it is off
 #endif
@@ -330,6 +337,7 @@ public:
 			if (millis() - m_lastMagToggleMillis >= magToggleDebounceMillis) {
 				if (m_pendingMagEnabled) {
 					magDriver.startPolling();
+					m_magSkip = MagSkipAfterStart;
 				} else {
 					magDriver.stopPolling();
 				}
@@ -415,23 +423,28 @@ public:
 
 			if (magAttached && toggles.getToggle(SensorToggles::MagEnabled)) {
 				magDriver.startPolling();
+				m_magSkip = MagSkipAfterStart;
 				calibrator.onMagEnabled();
 			}
 #if MAG_REQUIRED
-			// The board carries a mag; not finding it is a hardware fault.
-			// Found, it still has to deliver live data: checked over the first
+			// Production test, on the factory boot only (no gyro offset stored):
+			// the board carries a mag, so not finding it is a hardware fault, and
+			// found it still has to deliver live data -- checked over the first
 			// seconds (magCheckTick), polling even if the mag toggle is off, and
-			// before the first-boot gyro calibration.
-			holdFirstGyroCal(true);
-			if (!magAttached) {
-				m_Logger.error("Magnetometer required but not found");
-				statusManager.setStatus(SlimeVR::Status::MAG_FAULT, true);
-			} else {
-				magCheckStartMillis = millis();
-				magCheckRunning = true;
-				if (!toggles.getToggle(SensorToggles::MagEnabled)) {
-					magDriver.startPolling();
-					magCheckOwnsPolling = true;
+			// before the first gyro calibration.
+			if (firstGyroCalPending()) {
+				holdFirstGyroCal(true);
+				if (!magAttached) {
+					m_Logger.error("Magnetometer required but not found");
+					statusManager.setStatus(SlimeVR::Status::MAG_FAULT, true);
+				} else {
+					magCheckStartMillis = millis();
+					magCheckRunning = true;
+					if (!toggles.getToggle(SensorToggles::MagEnabled)) {
+						magDriver.startPolling();
+						m_magSkip = MagSkipAfterStart;
+						magCheckOwnsPolling = true;
+					}
 				}
 			}
 #endif
@@ -480,9 +493,11 @@ public:
 
 	SoftFusion::MagDriver magDriver;
 	bool magAttached = false;
+	static constexpr uint8_t MagSkipAfterStart = 2;
+	uint8_t m_magSkip = 0;
 
 #if MAG_REQUIRED
-	// Mag health check, every boot (production test on the first one).  Two
+	// Mag health check on the factory boot (the production test).  Two
 	// faults seen in the field besides a missing chip: no samples at all, and
 	// a chip that answers but repeats the same reading forever.  A live sensor
 	// at rest still moves by a few LSB of noise on every axis.
@@ -494,6 +509,13 @@ public:
 	uint32_t magCheckSamples = 0;
 	RawSensorT magCheckMin[3]{0, 0, 0};
 	RawSensorT magCheckMax[3]{0, 0, 0};
+
+	bool firstGyroCalPending() {
+		if constexpr (requires(Calib& c) { c.firstGyroCalPending(); }) {
+			return calibrator.firstGyroCalPending();
+		}
+		return false;
+	}
 
 	// The first-boot gyro calibration waits for the check and never runs after
 	// a failure: nothing is stored, so the next boot tests again.
