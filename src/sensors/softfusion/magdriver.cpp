@@ -24,6 +24,8 @@
 #include "magdriver.h"
 #include "../axisremap.h"
 
+#include <cstring>
+
 namespace SlimeVR::Sensors::SoftFusion {
 namespace {
 	int16_t clampToInt16(const int32_t value) {
@@ -176,6 +178,13 @@ bool MagDriver::init(MagInterface&& interface, bool supports9ByteMags) {
 	constexpr uint8_t whoAmIRetryDelayMs = 20;
 
 	for (auto& mag : supportedMags) {
+#ifdef MAG_ONLY
+		// A board that carries one known magnetometer probes only that one
+		// (e.g. -DMAG_ONLY='"MMC5603NJ"').
+		if (strcmp(mag.name, MAG_ONLY) != 0) {
+			continue;
+		}
+#endif
 		interface.setDeviceId(mag.deviceId);
 
 		logger.info("Trying mag %s!", mag.name);
