@@ -56,6 +56,7 @@ struct MagDefinition {
 	uint8_t dataReg;
 
 	std::function<bool(MagInterface& interface)> setup;
+	std::function<bool(const uint8_t* rawSample, MagDataWidth dataWidth, int16_t* outDecodedSample)> decodeRawSample;
 };
 
 class MagDriver {
@@ -63,6 +64,7 @@ public:
 	bool init(MagInterface&& interface, bool supports9ByteMags);
 	void startPolling() const;
 	void stopPolling() const;
+	[[nodiscard]] bool decodeRawSample(const uint8_t* rawSample, int16_t* outDecodedSample) const;
 	[[nodiscard]] const char* getAttachedMagName() const;
 
 private:

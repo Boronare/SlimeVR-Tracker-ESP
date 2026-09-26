@@ -13,6 +13,8 @@ const char* statusToString(Status status) {
 			return "WIFI_CONNECTING";
 		case SERVER_CONNECTING:
 			return "SERVER_CONNECTING";
+		case MAG_CALIBRATING:
+			return "MAG_CALIBRATING";
 		default:
 			return "UNKNOWN";
 	}

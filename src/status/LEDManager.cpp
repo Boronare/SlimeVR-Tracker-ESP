@@ -103,6 +103,20 @@ void LEDManager::update() {
 				length = IMU_ERROR_INTERVAL;
 				break;
 		}
+	} else if (statusManager.hasStatus(Status::MAG_CALIBRATING)) {
+		count = MAG_CALIBRATING_COUNT;
+		switch (m_CurrentStage) {
+			case ON:
+			case OFF:
+				length = MAG_CALIBRATING_LENGTH;
+				break;
+			case GAP:
+				length = DEFAULT_GAP;
+				break;
+			case INTERVAL:
+				length = MAG_CALIBRATING_INTERVAL;
+				break;
+		}
 	} else if (statusManager.hasStatus(Status::WIFI_CONNECTING)) {
 		count = WIFI_CONNECTING_COUNT;
 		switch (m_CurrentStage) {

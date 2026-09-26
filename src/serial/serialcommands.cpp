@@ -422,6 +422,34 @@ void cmdTemperatureCalibration(CmdParser* parser) {
 }
 
 void cmdDeleteCalibration(CmdParser* parser) {
+	if (parser->getParamCount() > 1) {
+		if (parser->equalCmdParam(1, "MAG")) {
+			size_t clearedSensors = 0;
+			for (auto& sensor : sensorManager.getSensors()) {
+				if (sensor->clearMagCalibration()) {
+					clearedSensors++;
+				}
+			}
+
+			if (clearedSensors > 0) {
+				logger.info(
+					"DELCAL MAG: cleared magnetometer calibration on %u sensor(s)",
+					static_cast<unsigned>(clearedSensors)
+				);
+			} else {
+				logger.warn(
+					"DELCAL MAG: no sensor supports magnetometer calibration erase"
+				);
+			}
+			return;
+		}
+
+		logger.info("Usage:");
+		logger.info("  DELCAL: erase all calibration");
+		logger.info("  DELCAL MAG: erase magnetometer calibration only");
+		return;
+	}
+
 	logger.info("ERASE CALIBRATION");
 
 	configuration.eraseSensors();

@@ -25,12 +25,15 @@
 
 #include <vector3.h>
 
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
 
 #include "../../../GlobalVars.h"
 #include "../../../configuration/Configuration.h"
 #include "AccelBiasCalibrationStep.h"
 #include "GyroBiasCalibrationStep.h"
+#include "MagCalibrationStep.h"
 #include "MotionlessCalibrationStep.h"
 #include "NullCalibrationStep.h"
 #include "SampleRateCalibrationStep.h"
@@ -59,7 +62,8 @@ public:
 		Logging::Logger& logger,
 		SensorToggleState& toggles
 	)
-		: Base{fusion, imu, sensorId, logger, toggles} {
+		: Base{fusion, imu, sensorId, logger, toggles}
+		, magCalibrationStep{calibration, logger} {
 		calibration.T_Ts = Consts::getDefaultTempTs();
 		activeCalibration.T_Ts = Consts::getDefaultTempTs();
 	}
@@ -91,6 +95,27 @@ public:
 			calculateZROChange();
 		}
 
+		{
+			if (!isMagCalibrationMissing(calibration)
+				&& !isMagCalibrationValid(calibration)) {
+				logger.warn("Invalid mag calibration data found, clearing it");
+				resetMagCalibration(calibration);
+			}
+
+			if (!isMagNormReferenceValid(calibration.M_refNorm)) {
+				calibration.M_refNorm = 0.0f;
+			}
+
+			syncMagCalibrationToActive();
+
+			const bool isMagCalibrationReadya = isMagCalibrationReady();
+			pendingMagCalibrationRequest
+				= shouldRequestMagCalibration(isMagCalibrationReadya);
+			if (!isMagCalibrationReadya) {
+				fusion.setMagFusionEnabled(false);
+			}
+		}
+
 		currentStep = &nullCalibrationStep;
 	}
 
@@ -104,11 +129,17 @@ public:
 		nextCalibrationStep = CalibrationStepEnum::SAMPLING_RATE;
 
 		calculateZROChange();
+		syncMagCalibrationToActive();
 
 		printCalibration();
 	}
 
 	void tick() final {
+		maybeStartMagCalibration();
+		if (!isMagCalibrationReady()) {
+			fusion.setMagFusionEnabled(false);
+		}
+
 		if (skippedAStep && !lastTickRest && fusion.getRestDetected()) {
 			computeNextCalibrationStep();
 			skippedAStep = false;
@@ -178,6 +209,26 @@ public:
 		);
 	}
 
+	void scaleMagSample(sensor_real_t magSample[3]) final {
+		float tmp[3];
+		for (uint8_t i = 0; i < 3; i++) {
+			tmp[i] = (magSample[i] - activeCalibration.M_B[i]);
+		}
+
+		magSample[0]
+			= (activeCalibration.M_Ainv[0][0] * tmp[0]
+			   + activeCalibration.M_Ainv[0][1] * tmp[1]
+			   + activeCalibration.M_Ainv[0][2] * tmp[2]);
+		magSample[1]
+			= (activeCalibration.M_Ainv[1][0] * tmp[0]
+			   + activeCalibration.M_Ainv[1][1] * tmp[1]
+			   + activeCalibration.M_Ainv[1][2] * tmp[2]);
+		magSample[2]
+			= (activeCalibration.M_Ainv[2][0] * tmp[0]
+			   + activeCalibration.M_Ainv[2][1] * tmp[1]
+			   + activeCalibration.M_Ainv[2][2] * tmp[2]);
+	}
+
 	float getGyroTimestep() final { return activeCalibration.G_Ts; }
 	float getMagTimestep() final { return activeCalibration.M_Ts; }
 
@@ -205,10 +256,49 @@ public:
 		}
 	}
 
+	void provideMagSample(const RawSensorT magSample[3]) final {
+		if (isCalibrating) {
+			currentStep->processMagSample(magSample);
+		}
+	}
+
 	void provideTempSample(float tempSample) final {
 		if (isCalibrating) {
 			currentStep->processTempSample(tempSample);
 		}
+	}
+
+	void onMagEnabled() final {
+		pendingMagCalibrationRequest = shouldRequestMagCalibration();
+	}
+
+	bool shouldUpdateMagFusion() const {
+		if (isCalibrating && currentStep == &magCalibrationStep) {
+			return false;
+		}
+		return isMagCalibrationReady();
+	}
+
+	bool shouldUseMagSample(const sensor_real_t* magSample) const {
+		if (!isMagNormReferenceValid(activeCalibration.M_refNorm)) {
+			return true;
+		}
+
+		const float magnitude = std::sqrt(
+			static_cast<float>(
+				magSample[0] * magSample[0] + magSample[1] * magSample[1]
+				+ magSample[2] * magSample[2]
+			)
+		);
+		if (!std::isfinite(magnitude)) {
+			return false;
+		}
+
+		const float allowedDeviation = std::max(
+			activeCalibration.M_refNorm * magNormRejectRelativeThreshold,
+			magNormRejectAbsoluteThreshold
+		);
+		return std::abs(magnitude - activeCalibration.M_refNorm) <= allowedDeviation;
 	}
 
 	void calculateZROChange() {
@@ -233,6 +323,24 @@ public:
 
 	float getZROChange() final { return activeZROChange; }
 
+	bool clearMagCalibration() final {
+		resetMagCalibration(calibration);
+		syncMagCalibrationToActive();
+		fusion.setMagFusionEnabled(false);
+
+		pendingMagCalibrationRequest = shouldRequestMagCalibration();
+
+		if (nextCalibrationStep == CalibrationStepEnum::MAG_CALIB) {
+			currentStep->cancel();
+			computeNextCalibrationStep();
+			isCalibrating = false;
+		}
+
+		saveCalibration();
+		logger.info("Mag calibration cleared");
+		return true;
+	}
+
 private:
 	enum class CalibrationStepEnum {
 		NONE,
@@ -240,7 +348,13 @@ private:
 		MOTIONLESS,
 		GYRO_BIAS,
 		ACCEL_BIAS,
+		MAG_CALIB,
 	};
+
+	static constexpr float minValidMagReferenceNorm = 1.0f;
+	static constexpr float maxValidMagReferenceNorm = 100000.0f;
+	static constexpr float magNormRejectRelativeThreshold = 0.07f;
+	static constexpr float magNormRejectAbsoluteThreshold = 20.0f;
 
 	void computeNextCalibrationStep() {
 		if (!calibration.motionlessCalibrated && Base::HasMotionlessCalib) {
@@ -301,6 +415,22 @@ private:
 					skippedAStep = true;
 				}
 				break;
+			case CalibrationStepEnum::MAG_CALIB:
+				if (!isMagCalibrationValid(calibration)) {
+					logger.warn(
+						"Mag calibration output was invalid, keeping mag disabled"
+					);
+					resetMagCalibration(calibration);
+					fusion.setMagFusionEnabled(false);
+				}
+				syncMagCalibrationToActive();
+				pendingMagCalibrationRequest = false;
+				computeNextCalibrationStep();
+
+				if (print) {
+					printCalibration(CalibrationPrintFlags::MAG_CALIB);
+				}
+				break;
 		}
 
 		isCalibrating = false;
@@ -308,6 +438,138 @@ private:
 		if (save) {
 			saveCalibration();
 		}
+	}
+
+	void maybeStartMagCalibration() {
+		if (!pendingMagCalibrationRequest) {
+			return;
+		}
+
+		if (magCalibrationAttemptedSinceBoot) {
+			pendingMagCalibrationRequest = false;
+			return;
+		}
+
+		if (!toggles.getToggle(SensorToggles::MagEnabled)) {
+			return;
+		}
+
+		if (isMagCalibrationReady()) {
+			pendingMagCalibrationRequest = false;
+			return;
+		}
+
+		if (isCalibrating
+			|| nextCalibrationStep == CalibrationStepEnum::SAMPLING_RATE) {
+			return;
+		}
+
+		nextCalibrationStep = CalibrationStepEnum::MAG_CALIB;
+		currentStep = &magCalibrationStep;
+		pendingMagCalibrationRequest = false;
+		magCalibrationAttemptedSinceBoot = true;
+	}
+
+	bool shouldRequestMagCalibration(bool magCalibrationReady) const {
+		return toggles.getToggle(SensorToggles::MagEnabled) && !magCalibrationReady
+			&& !magCalibrationAttemptedSinceBoot;
+	}
+
+	bool shouldRequestMagCalibration() const {
+		return shouldRequestMagCalibration(isMagCalibrationReady());
+	}
+
+	bool isMagCalibrationMissing(
+		const Configuration::RuntimeCalibrationSensorConfig& config
+	) const {
+		constexpr float epsilon = 1e-6f;
+		bool offsetsAreZero = true;
+		for (uint8_t i = 0; i < 3; i++) {
+			if (std::abs(config.M_B[i]) > epsilon) {
+				offsetsAreZero = false;
+				break;
+			}
+		}
+
+		bool matrixIsIdentity = true;
+		for (uint8_t i = 0; i < 3; i++) {
+			for (uint8_t j = 0; j < 3; j++) {
+				const float expected = i == j ? 1.0f : 0.0f;
+				if (std::abs(config.M_Ainv[i][j] - expected) > epsilon) {
+					matrixIsIdentity = false;
+					break;
+				}
+			}
+		}
+
+		return offsetsAreZero && matrixIsIdentity;
+	}
+
+	bool isMagCalibrationValid(
+		const Configuration::RuntimeCalibrationSensorConfig& config
+	) const {
+		float diagonalAbs[3]{0.0f, 0.0f, 0.0f};
+		for (uint8_t i = 0; i < 3; i++) {
+			if (!std::isfinite(config.M_B[i])) {
+				return false;
+			}
+
+			for (uint8_t j = 0; j < 3; j++) {
+				const float v = config.M_Ainv[i][j];
+				if (!std::isfinite(v) || std::abs(v) > 20.0f) {
+					return false;
+				}
+			}
+			diagonalAbs[i] = std::abs(config.M_Ainv[i][i]);
+		}
+
+		const float meanDiagonal
+			= (diagonalAbs[0] + diagonalAbs[1] + diagonalAbs[2]) / 3.0f;
+		if (!std::isfinite(meanDiagonal) || meanDiagonal < 1e-4f
+			|| meanDiagonal > 10.0f) {
+			return false;
+		}
+
+		const float diagonalTolerance = std::max(meanDiagonal * 0.6f, 0.05f);
+		for (uint8_t i = 0; i < 3; i++) {
+			if (std::abs(diagonalAbs[i] - meanDiagonal) > diagonalTolerance) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	static bool isMagNormReferenceValid(float refNorm) {
+		return std::isfinite(refNorm) && refNorm >= minValidMagReferenceNorm
+			&& refNorm <= maxValidMagReferenceNorm;
+	}
+
+	bool isMagCalibrationReady() const {
+		return !isMagCalibrationMissing(calibration)
+			&& isMagCalibrationValid(calibration);
+	}
+
+	void syncMagCalibrationToActive() {
+		for (uint8_t i = 0; i < 3; i++) {
+			activeCalibration.M_B[i] = calibration.M_B[i];
+			for (uint8_t j = 0; j < 3; j++) {
+				activeCalibration.M_Ainv[i][j] = calibration.M_Ainv[i][j];
+			}
+		}
+		activeCalibration.M_refNorm = calibration.M_refNorm;
+	}
+
+	static void resetMagCalibration(
+		Configuration::RuntimeCalibrationSensorConfig& calibration
+	) {
+		for (uint8_t i = 0; i < 3; i++) {
+			calibration.M_B[i] = 0.0f;
+			for (uint8_t j = 0; j < 3; j++) {
+				calibration.M_Ainv[i][j] = (i == j) ? 1.0f : 0.0f;
+			}
+		}
+		calibration.M_refNorm = 0.0f;
 	}
 
 	void saveCalibration() {
@@ -324,11 +586,13 @@ private:
 		MOTIONLESS = 2,
 		GYRO_BIAS = 4,
 		ACCEL_BIAS = 8,
+		MAG_CALIB = 16,
 	};
 
 	static constexpr CalibrationPrintFlags PrintAllCalibration
 		= CalibrationPrintFlags::TIMESTEPS | CalibrationPrintFlags::MOTIONLESS
-		| CalibrationPrintFlags::GYRO_BIAS | CalibrationPrintFlags::ACCEL_BIAS;
+		| CalibrationPrintFlags::GYRO_BIAS | CalibrationPrintFlags::ACCEL_BIAS
+		| CalibrationPrintFlags::MAG_CALIB;
 
 	void printCalibration(CalibrationPrintFlags toPrint = PrintAllCalibration) {
 		if (any(toPrint & CalibrationPrintFlags::TIMESTEPS)) {
@@ -396,6 +660,29 @@ private:
 				logger.info("Accel bias not calibrated");
 			}
 		}
+
+		if (any(toPrint & CalibrationPrintFlags::MAG_CALIB)) {
+			if (isMagCalibrationReady()) {
+				logger.info(
+					"Mag calibration offsets: %f %f %f",
+					calibration.M_B[0],
+					calibration.M_B[1],
+					calibration.M_B[2]
+				);
+				logger.info("Mag calibration M_Ainv:");
+				for (uint8_t i = 0; i < 3; i++) {
+					logger.info(
+						"  %f %f %f",
+						calibration.M_Ainv[i][0],
+						calibration.M_Ainv[i][1],
+						calibration.M_Ainv[i][2]
+					);
+				}
+				logger.info("Mag calibration ref norm: %f", calibration.M_refNorm);
+			} else {
+				logger.info("Mag not calibrated");
+			}
+		}
 	}
 
 	CalibrationStepEnum nextCalibrationStep = CalibrationStepEnum::SAMPLING_RATE;
@@ -413,6 +700,7 @@ private:
 		calibration,
 		static_cast<float>(Consts::AScale)
 	};
+	MagCalibrationStep<RawSensorT> magCalibrationStep;
 	NullCalibrationStep<RawSensorT> nullCalibrationStep{calibration};
 
 	CalibrationStep<RawSensorT>* currentStep = &nullCalibrationStep;
@@ -420,6 +708,8 @@ private:
 	bool isCalibrating = false;
 	bool skippedAStep = false;
 	bool lastTickRest = false;
+	bool pendingMagCalibrationRequest = false;
+	bool magCalibrationAttemptedSinceBoot = false;
 
 	SlimeVR::Configuration::RuntimeCalibrationSensorConfig calibration{
 		// let's create here transparent calibration that doesn't affect input data
@@ -443,6 +733,10 @@ private:
 
 		.accelCalibrated = {false, false, false},
 		.A_off = {0.0, 0.0, 0.0},
+
+		.M_B = {0.0, 0.0, 0.0},
+		.M_Ainv = {{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}},
+		.M_refNorm = 0.0f
 	};
 
 	float activeZROChange = 0;

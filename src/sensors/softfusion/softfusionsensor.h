@@ -150,6 +150,38 @@ class SoftFusionSensor : public Sensor {
 		}
 	}
 
+	bool shouldUpdateMagFusion() {
+		if constexpr (requires(Calib& c) { c.shouldUpdateMagFusion(); }) {
+			return calibrator.shouldUpdateMagFusion();
+		}
+		return true;
+	}
+
+	bool shouldUseMagSample(const sensor_real_t magSample[3]) {
+		if constexpr (requires(Calib& c, const sensor_real_t* sample) {
+						  c.shouldUseMagSample(sample);
+					  }) {
+			return calibrator.shouldUseMagSample(magSample);
+		}
+		return true;
+	}
+
+	void processMagSample(const RawSensorT xyz[3], const sensor_real_t timeDelta) {
+		if (!toggles.getToggle(SensorToggles::MagEnabled)) {
+			return;
+		}
+		sensor_real_t magData[]
+			= {static_cast<sensor_real_t>(xyz[0]),
+			   static_cast<sensor_real_t>(xyz[1]),
+			   static_cast<sensor_real_t>(xyz[2])};
+
+		calibrator.scaleMagSample(magData);
+		if (shouldUpdateMagFusion() && shouldUseMagSample(magData)) {
+			m_fusion.updateMag(magData, calibrator.getMagTimestep());
+		}
+		calibrator.provideMagSample(xyz);
+	}
+
 public:
 	static constexpr auto TypeID = SensorType::Type;
 	static constexpr uint8_t Address = SensorType::Address;
@@ -182,6 +214,10 @@ public:
 	void checkSensorTimeout() {
 		uint32_t now = millis();
 		constexpr uint32_t sensorTimeoutMillis = 2e3;  // 2 seconds
+		constexpr uint32_t magToggleGraceMillis = 3000;  // after a mag toggle
+		if (now - m_lastMagToggleMillis < magToggleGraceMillis) {
+			return;
+		}
 		if (m_lastRotationUpdateMillis + sensorTimeoutMillis > now) {
 			return;
 		}
@@ -251,6 +287,13 @@ public:
 				[&](int16_t sample, float TempTs) {
 					processTempSample(sample, TempTs);
 				},
+				[&](const auto sample[3], float MagTs) {
+					processMagSample(sample, MagTs);
+				},
+				[&](const uint8_t* rawSample, int16_t* decodedSample) {
+					return magAttached
+						&& magDriver.decodeRawSample(rawSample, decodedSample);
+				},
 			});
 			if (overwhelmed) {
 				calibrator.signalOverwhelmed();
@@ -272,6 +315,20 @@ public:
 
 		if (calibrationDetector.update(m_fusion)) {
 			markRestCalibrationComplete();
+		}
+
+		// A mag toggle reconfigures the aux I2C bus; do it here, debounced,
+		// rather than from the toggle callback.
+		if (m_hasPendingMagToggle) {
+			constexpr uint32_t magToggleDebounceMillis = 200;
+			if (millis() - m_lastMagToggleMillis >= magToggleDebounceMillis) {
+				if (m_pendingMagEnabled) {
+					magDriver.startPolling();
+				} else {
+					magDriver.stopPolling();
+				}
+				m_hasPendingMagToggle = false;
+			}
 		}
 	}
 
@@ -332,11 +389,14 @@ public:
 		calibrator.checkStartupCalibration();
 
 		if constexpr (Consts::SupportsMags) {
-			magDriver.init(
+			magAttached = magDriver.init(
 				SoftFusion::MagInterface{
 					.readByte
 					= [&](uint8_t address) { return m_sensor.readAux(address); },
-					.writeByte = [&](uint8_t address, uint8_t value) {},
+					.writeByte =
+						[&](uint8_t address, uint8_t value) {
+							m_sensor.writeAux(address, value);
+						},
 					.setDeviceId
 					= [&](uint8_t deviceId) { m_sensor.setAuxId(deviceId); },
 					.startPolling
@@ -347,17 +407,19 @@ public:
 				Consts::Supports9ByteMag
 			);
 
-			if (toggles.getToggle(SensorToggles::MagEnabled)) {
+			if (magAttached && toggles.getToggle(SensorToggles::MagEnabled)) {
 				magDriver.startPolling();
+				calibrator.onMagEnabled();
 			}
 		}
 
 		toggles.onToggleChange([&](SensorToggles toggle, bool value) {
-			if (toggle == SensorToggles::MagEnabled) {
+			if (magAttached && toggle == SensorToggles::MagEnabled) {
+				m_lastMagToggleMillis = millis();
+				m_pendingMagEnabled = value;
+				m_hasPendingMagToggle = true;
 				if (value) {
-					magDriver.startPolling();
-				} else {
-					magDriver.stopPolling();
+					calibrator.onMagEnabled();
 				}
 			}
 		});
@@ -367,9 +429,12 @@ public:
 		calibrator.startCalibration(calibrationType);
 	}
 
+	bool clearMagCalibration() final { return calibrator.clearMagCalibration(); }
+
 	[[nodiscard]] bool isFlagSupported(SensorToggles toggle) const final {
 		return toggle == SensorToggles::CalibrationEnabled
-			|| toggle == SensorToggles::TempGradientCalibrationEnabled;
+			|| toggle == SensorToggles::TempGradientCalibrationEnabled
+			|| (toggle == SensorToggles::MagEnabled && magAttached);
 	}
 
 	SensorStatus getSensorState() final { return m_status; }
@@ -380,6 +445,9 @@ public:
 
 	SensorStatus m_status = SensorStatus::SENSOR_OFFLINE;
 	uint32_t m_lastPollTime = micros();
+	uint32_t m_lastMagToggleMillis = 0;
+	bool m_pendingMagEnabled = false;
+	bool m_hasPendingMagToggle = false;
 	uint32_t m_lastRotationUpdateMillis = 0;
 	uint32_t m_lastRotationPacketSent = 0;
 	uint32_t m_lastTemperaturePacketSent = 0;
@@ -387,6 +455,7 @@ public:
 	RestCalibrationDetector calibrationDetector;
 
 	SoftFusion::MagDriver magDriver;
+	bool magAttached = false;
 
 	static bool checkPresent(const RegisterInterface& imuInterface) {
 		I2Cdev::readTimeout = 100;

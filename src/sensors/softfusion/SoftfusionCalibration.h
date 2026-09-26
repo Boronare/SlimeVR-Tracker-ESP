@@ -239,6 +239,19 @@ public:
 		return calibration.MotionlessData;
 	}
 
+	bool clearMagCalibration() final {
+		for (uint8_t i = 0; i < 3; i++) {
+			calibration.M_B[i] = 0.0f;
+			for (uint8_t j = 0; j < 3; j++) {
+				calibration.M_Ainv[i][j] = (i == j) ? 1.0f : 0.0f;
+			}
+		}
+
+		saveCalibration();
+		logger.info("Mag calibration cleared");
+		return true;
+	}
+
 private:
 	static constexpr auto GyroCalibDelaySeconds = 5;
 	static constexpr auto GyroCalibSeconds = 5;

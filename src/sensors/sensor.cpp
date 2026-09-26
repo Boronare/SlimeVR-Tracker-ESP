@@ -91,6 +91,8 @@ void Sensor::resetTemperatureCalibrationState() {
 	printTemperatureCalibrationUnsupported();
 };
 
+bool Sensor::clearMagCalibration() { return false; }
+
 const char* Sensor::getAttachedMagnetometer() const { return nullptr; }
 
 SlimeVR::Configuration::SensorConfigBits Sensor::getSensorConfigData() {
@@ -167,8 +169,11 @@ void Sensor::setFlag(SensorToggles toggle, bool state) {
 		return;
 	}
 
-	toggles.setToggle(toggle, state);
-
-	configuration.setSensorToggles(sensorId, toggles);
+	SensorToggleState persistedToggles{toggles.getValues()};
+	persistedToggles.setToggle(toggle, state);
+	configuration.setSensorToggles(sensorId, persistedToggles);
 	configuration.save();
+
+	// Apply the change to the live sensor state, emitting onToggleChange callback.
+	toggles.setToggle(toggle, state);
 }

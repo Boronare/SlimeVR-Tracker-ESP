@@ -36,13 +36,21 @@ namespace SlimeVR::Sensors::SoftFusion::Drivers {
 // Gyroscope ODR = 208Hz, accel ODR = 104Hz
 
 struct LSM6DSR : LSM6DSOutputHandler {
+
+	enum class AuxHubOdr : uint8_t {
+		k104Hz = 0x00,
+		k52Hz = 0x40,
+		k26Hz = 0x80,
+		k13Hz = 0xC0,
+	};
+
 	static constexpr uint8_t Address = 0x6a;
 	static constexpr auto Name = "LSM6DSR";
 	static constexpr auto Type = SensorTypeID::LSM6DSR;
 
 	static constexpr float GyrFreq = 208;
 	static constexpr float AccFreq = 104;
-	static constexpr float MagFreq = 120;
+	static constexpr float MagFreq = 26; // m_aux_hub_odr == k26Hz
 	static constexpr float TempFreq = 52;
 
 	static constexpr float GyrTs = 1.0 / GyrFreq;
@@ -92,7 +100,33 @@ struct LSM6DSR : LSM6DSOutputHandler {
 
 		static constexpr uint8_t FifoStatus = 0x3a;
 		static constexpr uint8_t FifoData = 0x78;
+		
 	};
+	// sensor hub registers bank access
+	static constexpr uint8_t RFuncCfgAccess = 0x01;
+	static constexpr uint8_t RMasterConfig = 0x14;
+	static constexpr uint8_t RSlv0Add = 0x15;
+	static constexpr uint8_t RSlv0Subadd = 0x16;
+	static constexpr uint8_t RSlv0Config = 0x17;
+	static constexpr uint8_t RSlv1Add = 0x18;
+	static constexpr uint8_t RSlv1Subadd = 0x19;
+	static constexpr uint8_t RSlv1Config = 0x1a;
+	static constexpr uint8_t RDatawriteSlv0 = 0x21;
+	static constexpr uint8_t RSensorHub1Reg = 0x02;
+	static constexpr uint8_t RStatusMaster = 0x22;
+
+	// sensor hub registers values
+	static constexpr uint8_t VFuncCfgAccessEnable = 0x40;
+	static constexpr uint8_t VFuncCfgAccessDisable = 0x00;
+	static constexpr uint8_t VMasterReset = 0x80;
+	static constexpr uint8_t VMasterEnable = 0x45;
+	static constexpr uint8_t VMasterDisable = 0x00;
+	static constexpr uint8_t VMasterEndOpMask = 0x01;  // STATUS_MASTER.sens_hub_endop
+	static constexpr uint8_t VMasterNackMask = 0x78;   // STATUS_MASTER.slave[0..3]_nack
+
+	uint8_t m_aux_hub_odr = static_cast<uint8_t>(AuxHubOdr::k26Hz); // 26Hz
+	uint8_t m_aux_data_reg = 0;
+	uint8_t m_aux_read_len = 0;
 
 	LSM6DSR(RegisterInterface& registerInterface, SlimeVR::Logging::Logger& logger)
 		: LSM6DSOutputHandler(registerInterface, logger) {}
@@ -120,8 +154,187 @@ struct LSM6DSR : LSM6DSOutputHandler {
 			std::move(callbacks),
 			GyrTs,
 			AccTs,
-			TempTs
+			TempTs,
+			MagTs
 		);
+	}
+
+	void setAuxId(uint8_t deviceId) {
+		enterEmbeddedAccess();
+
+		m_RegisterInterface.writeReg(RMasterConfig, VMasterReset);
+		delay(20);
+		m_RegisterInterface.writeReg(RMasterConfig, VMasterEnable);
+		delay(5);
+		m_RegisterInterface.writeReg(RMasterConfig, VMasterDisable);
+		delay(1);
+
+		m_RegisterInterface.writeReg(RSlv0Add, (deviceId << 1)); // bit0 is R/W bit, write
+		m_RegisterInterface.writeReg(RSlv0Config, m_aux_hub_odr);
+		m_RegisterInterface.writeReg(RSlv1Add, (deviceId << 1) | 0x01); // read
+		m_RegisterInterface.writeReg(RSlv1Config, 0x00); // reset
+		m_RegisterInterface.writeReg(RMasterConfig, VMasterEnable);
+		delay(5);
+
+		exitEmbeddedAccess();
+	}
+
+	void writeAux(uint8_t regAddr, uint8_t value) {
+		enterEmbeddedAccess();
+
+		constexpr uint8_t maxRetries = 5;
+		constexpr uint32_t auxOpTimeoutMs = 120;
+		constexpr uint32_t retryDelayMs = 40;
+		bool writeSuccess = false;
+
+		for (uint8_t attempt = 0; attempt < maxRetries; ++attempt) {
+			m_RegisterInterface.writeReg(RMasterConfig, VMasterDisable);
+			m_RegisterInterface.writeReg(RSlv0Subadd, regAddr);
+			m_RegisterInterface.writeReg(RDatawriteSlv0, value);
+			m_RegisterInterface.writeReg(RMasterConfig, VMasterEnable);
+			if (waitAuxOperationDone(auxOpTimeoutMs)) {
+				writeSuccess = true;
+				break;
+			}
+
+			if (attempt + 1 < maxRetries) {
+				delay(retryDelayMs);
+			}
+		}
+
+		if (!writeSuccess) {
+			m_Logger.error("LSM6DSR: Failed writing aux register 0x%02X after %u attempts", regAddr, static_cast<unsigned>(maxRetries));
+		}
+
+		resetAuxPollingSetting();
+		if (m_aux_read_len != 0) {
+			setAuxPollingSetting();
+			if (!waitAuxOperationDone(auxOpTimeoutMs)) {
+				m_Logger.error("LSM6DSR: Timeout restoring aux polling after write register 0x%02X", regAddr);
+			}
+		}
+
+		exitEmbeddedAccess();
+	}
+
+	uint8_t readAux(uint8_t address) {
+		enterEmbeddedAccess();
+		
+		uint8_t out_value = 0;
+		constexpr uint8_t maxRetries = 5;
+		constexpr uint32_t auxOpTimeoutMs = 120;
+		constexpr uint32_t retryDelayMs = 40;
+		bool readSuccess = false;
+
+		for (uint8_t attempt = 0; attempt < maxRetries; ++attempt) {
+			m_RegisterInterface.writeReg(RMasterConfig, VMasterDisable);
+			m_RegisterInterface.writeReg(RSlv1Config, 0x00);
+			m_RegisterInterface.writeReg(RSlv1Subadd, address);
+			m_RegisterInterface.writeReg(RSlv1Config, 0x09);
+			m_RegisterInterface.writeReg(RMasterConfig, VMasterEnable);
+
+			if (waitAuxOperationDone(auxOpTimeoutMs)) {
+				out_value = m_RegisterInterface.readReg(RSensorHub1Reg);
+				readSuccess = true;
+				break;
+			}
+
+			if (attempt + 1 < maxRetries) {
+				delay(retryDelayMs);
+			}
+		}
+
+		if (!readSuccess) {
+			m_Logger.error("LSM6DSR: Failed reading aux register 0x%02X after %u attempts", address, static_cast<unsigned>(maxRetries));
+		}
+
+		resetAuxPollingSetting();
+
+		if (m_aux_read_len != 0) {
+			setAuxPollingSetting();
+			if (!waitAuxOperationDone(auxOpTimeoutMs)) {
+				m_Logger.error("LSM6DSR: Timeout restoring aux polling after read register 0x%02X", address);
+			}
+		}
+
+		exitEmbeddedAccess();
+		return out_value;
+	}
+
+	void startAuxPolling(uint8_t dataReg, MagDataWidth dataWidth) {
+		enterEmbeddedAccess();
+		constexpr uint32_t auxStartTimeoutMs = 120;
+
+		m_aux_data_reg = dataReg;
+		m_aux_read_len = (dataWidth == MagDataWidth::SixByte) ? 6 : 9;
+
+		resetAuxPollingSetting();
+		setAuxPollingSetting();
+		if (!waitAuxOperationDone(auxStartTimeoutMs)) {
+			m_Logger.error("LSM6DSR: Timeout starting aux polling");
+		}
+
+		exitEmbeddedAccess();
+	}
+
+	void stopAuxPolling() {
+		enterEmbeddedAccess();
+
+		resetAuxPollingSetting();
+		m_aux_read_len = 0;
+
+		exitEmbeddedAccess();
+	}
+
+	void setAuxPollingSetting() {
+		if (m_aux_read_len == 0) {
+			return;
+		}
+
+		m_RegisterInterface.writeReg(RSlv1Subadd, m_aux_data_reg);
+		m_RegisterInterface.writeReg(RSlv1Config, static_cast<uint8_t>((m_aux_read_len & 0x0F) | 0x08));
+		m_RegisterInterface.writeReg(RMasterConfig, VMasterEnable);
+	}
+
+	void resetAuxPollingSetting() {
+		m_RegisterInterface.writeReg(RMasterConfig, VMasterDisable);
+		m_RegisterInterface.writeReg(RSlv1Config, 0x00);
+	}
+
+	void setAuxHubOdr(AuxHubOdr odr) {
+		m_aux_hub_odr = static_cast<uint8_t>(odr);
+		enterEmbeddedAccess();
+
+		m_RegisterInterface.writeReg(RSlv0Config, m_aux_hub_odr);
+
+		exitEmbeddedAccess();
+	}
+
+	void enterEmbeddedAccess() {
+		m_RegisterInterface.writeReg(RFuncCfgAccess, VFuncCfgAccessEnable);
+		delayMicroseconds(50);
+	}
+
+	void exitEmbeddedAccess() {
+		delayMicroseconds(50);
+		m_RegisterInterface.writeReg(RFuncCfgAccess, VFuncCfgAccessDisable);
+		delayMicroseconds(50);
+	}
+
+	bool waitAuxOperationDone(uint32_t timeoutMs) {
+		uint32_t startTime = millis();
+		while (millis() - startTime < timeoutMs) {
+			uint8_t status = m_RegisterInterface.readReg(RStatusMaster);
+			if ((status & VMasterNackMask) != 0) {
+				return false;
+			}
+			if ((status & VMasterEndOpMask) != 0) {
+				return true;
+			}
+			delay(1);
+		}
+		
+		return false;
 	}
 };
 

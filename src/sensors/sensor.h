@@ -85,6 +85,7 @@ public:
 	virtual void printDebugTemperatureCalibrationState();
 	virtual void resetTemperatureCalibrationState();
 	virtual void saveTemperatureCalibration();
+	virtual bool clearMagCalibration();
 	// TODO: currently only for softfusionsensor, bmi160 and others should get
 	// an overload too
 	virtual const char* getAttachedMagnetometer() const;

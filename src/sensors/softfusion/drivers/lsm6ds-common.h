@@ -59,7 +59,8 @@ struct LSM6DSOutputHandler {
 		DriverCallbacks<int16_t>&& callbacks,
 		float GyrTs,
 		float AccTs,
-		float TempTs
+		float TempTs,
+		float MagTs
 	) {
 		constexpr auto FIFO_SAMPLES_MASK = 0x3ff;
 		constexpr auto FIFO_OVERRUN_LATCHED_MASK = 0x800;
@@ -100,6 +101,16 @@ struct LSM6DSOutputHandler {
 					break;
 				case 0x03:  // Temperature
 					callbacks.processTempSample(entry.xyz[0], TempTs);
+					break;
+				case 0x0f:  // Sensor hub slave 1: the magnetometer polled over aux I2C
+					if (callbacks.processMagSample) {
+						int16_t mag[3]{0, 0, 0};
+						if (callbacks.decodeRawMagSample
+							&& !callbacks.decodeRawMagSample(entry.raw, mag)) {
+							continue;
+						}
+						callbacks.processMagSample(mag, MagTs);
+					}
 					break;
 			}
 		}

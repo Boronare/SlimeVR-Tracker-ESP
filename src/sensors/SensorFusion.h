@@ -58,6 +58,7 @@ public:
 	void updateAcc(const sensor_real_t Axyz[3], sensor_real_t deltat = -1.0f);
 	void updateMag(const sensor_real_t Mxyz[3], sensor_real_t deltat = -1.0f);
 	void updateGyro(const sensor_real_t Gxyz[3], sensor_real_t deltat = -1.0f);
+	void setMagFusionEnabled(bool enabled);
 
 	bool isUpdated();
 	void clearUpdated();

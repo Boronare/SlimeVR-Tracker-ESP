@@ -51,6 +51,7 @@ public:
 	virtual void signalOverwhelmed() {}
 	virtual void processAccelSample(const SensorRawT accelSample[3]) {}
 	virtual void processGyroSample(const SensorRawT accelSample[3]) {}
+	virtual void processMagSample(const SensorRawT magSample[3]) {}
 	virtual void processTempSample(float tempSample) {}
 
 	bool restDetectionDelayElapsed() {
